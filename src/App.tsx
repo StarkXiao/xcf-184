@@ -10,6 +10,7 @@ import { Workshop } from './workshop/components/Workshop';
 import { useWorkshop } from './workshop/useWorkshop';
 import { TournamentCenter } from './tournament';
 import { tournamentEngine } from './tournament/tournamentEngine';
+import { tournamentStateEmitter } from './tournament/useTournament';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
@@ -40,14 +41,27 @@ function App() {
   const [earnedCoins, setEarnedCoins] = useState(0);
   const [tournamentTrackId, setTournamentTrackId] = useState<string | null>(null);
   const [tournamentResult, setTournamentResult] = useState<{ trackId: string; score: number } | null>(null);
+  const [, setForceUpdate] = useState(0);
 
   const workshop = useWorkshop();
+
+  const tournamentTrackIdRef = useRef<string | null>(null);
+  const gameStateRef = useRef<GameState>('menu');
   const lastScoreUpdateRef = useRef(0);
+
+  useEffect(() => {
+    tournamentTrackIdRef.current = tournamentTrackId;
+  }, [tournamentTrackId]);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
 
   const handleStatsUpdate = useCallback((newStats: GameStats) => {
     setStats(newStats);
 
-    if (tournamentTrackId && gameState === 'playing') {
+    const currentTrackId = tournamentTrackIdRef.current;
+    if (currentTrackId && gameStateRef.current === 'playing') {
       const now = Date.now();
       if (now - lastScoreUpdateRef.current >= 250) {
         lastScoreUpdateRef.current = now;
@@ -62,11 +76,14 @@ function App() {
           newStats.time,
         );
         tournamentEngine.addScoringEvent('checkpoint', Math.floor(adjustedScore * 0.02), '累计得分奖励');
+        tournamentStateEmitter.emit();
+        setForceUpdate((n) => n + 1);
       }
     }
-  }, [tournamentTrackId, gameState, workshop]);
+  }, [workshop]);
 
   const handleStateChange = useCallback((state: GameState) => {
+    gameStateRef.current = state;
     setGameState(state);
   }, []);
 
@@ -86,16 +103,19 @@ function App() {
 
     workshop.addCoins(coins);
 
-    if (tournamentTrackId) {
+    const currentTrackId = tournamentTrackIdRef.current;
+    if (currentTrackId) {
       const result = tournamentEngine.completeTrack(adjustedScore);
       if (result) {
-        setTournamentResult({ trackId: tournamentTrackId, score: result.score });
+        setTournamentResult({ trackId: currentTrackId, score: result.score });
       }
+      tournamentTrackIdRef.current = null;
       setTournamentTrackId(null);
+      tournamentStateEmitter.emit();
     }
 
     setGameState('gameover');
-  }, [workshop, tournamentTrackId]);
+  }, [workshop]);
 
   useEffect(() => {
     if (!containerRef.current || isInitialized) return;
@@ -159,11 +179,23 @@ function App() {
   };
 
   const handleRestart = () => {
+    const currentTrackId = tournamentTrackIdRef.current;
+    if (currentTrackId) {
+      const success = tournamentEngine.selectTrack(currentTrackId);
+      if (success) {
+        tournamentStateEmitter.emit();
+      }
+    }
+    lastScoreUpdateRef.current = 0;
     gameEngineRef.current?.restart();
   };
 
   const handleMainMenu = () => {
     gameEngineRef.current?.pause();
+    if (tournamentTrackIdRef.current) {
+      tournamentTrackIdRef.current = null;
+      setTournamentTrackId(null);
+    }
     setGameState('menu');
   };
 
@@ -194,8 +226,10 @@ function App() {
     if (!success) return;
 
     setTournamentTrackId(trackId);
+    tournamentTrackIdRef.current = trackId;
     setShowTournament(false);
     lastScoreUpdateRef.current = 0;
+    tournamentStateEmitter.emit();
 
     if (gameEngineRef.current && configOverride) {
       gameEngineRef.current.reconfigure({
@@ -269,7 +303,10 @@ function App() {
           onClose={handleCloseTournament}
           onStartTrack={handleStartTournamentTrack}
           lastResult={tournamentResult}
-          onClearResult={() => setTournamentResult(null)}
+          onClearResult={() => {
+            setTournamentResult(null);
+            tournamentStateEmitter.emit();
+          }}
         />
       )}
     </div>

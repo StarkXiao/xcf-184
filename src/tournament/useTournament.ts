@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { tournamentEngine } from './tournamentEngine';
 import type {
   Division,
@@ -15,19 +15,52 @@ import type {
   GameConfigOverride,
 } from './types';
 
-export function useTournament() {
+type Listener = () => void;
+
+class TournamentStateEmitter {
+  private listeners = new Set<Listener>();
+
+  public subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  public emit(): void {
+    this.listeners.forEach((listener) => listener());
+  }
+}
+
+export const tournamentStateEmitter = new TournamentStateEmitter();
+
+export function useTournament(autoRefresh = true) {
   const [state, setState] = useState<TournamentState>(() => {
     tournamentEngine.loadFromLocalStorage();
     return tournamentEngine.getState();
   });
-  const [liveScore, setLiveScore] = useState<LiveScore>(tournamentEngine.getLiveScore());
-  const [rankings, setRankings] = useState<RankingEntry[]>(tournamentEngine.getRankings());
+  const [liveScore, setLiveScore] = useState<LiveScore>({ ...tournamentEngine.getLiveScore() });
+  const [rankings, setRankings] = useState<RankingEntry[]>([...tournamentEngine.getRankings()]);
 
   const refreshState = useCallback(() => {
-    setState(tournamentEngine.getState());
-    setLiveScore(tournamentEngine.getLiveScore());
-    setRankings(tournamentEngine.getRankings());
+    setState({ ...tournamentEngine.getState() });
+    setLiveScore({ ...tournamentEngine.getLiveScore() });
+    setRankings([...tournamentEngine.getRankings()]);
   }, []);
+
+  useEffect(() => {
+    if (!autoRefresh) return undefined;
+    const unsubscribe = tournamentStateEmitter.subscribe(refreshState);
+    return unsubscribe;
+  }, [autoRefresh, refreshState]);
+
+  useEffect(() => {
+    if (!autoRefresh) return undefined;
+    const interval = setInterval(() => {
+      if (tournamentEngine.getState().status === 'in_progress') {
+        refreshState();
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [autoRefresh, refreshState]);
 
   const register = useCallback((playerName: string, division: Division): boolean => {
     const success = tournamentEngine.register(playerName, division);
