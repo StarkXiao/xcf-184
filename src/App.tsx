@@ -17,11 +17,15 @@ import { trainingStateEmitter } from './training/useTraining';
 import { WeatherLab } from './weatherLab';
 import { weatherLabEngine } from './weatherLab/weatherLabEngine';
 import type { WeatherScene, FlightDataPoint } from './weatherLab/types';
+import { LevelEditor, LevelEditorProvider } from './levelEditor';
+import { levelEditorEngine } from './levelEditor/levelEditorEngine';
+import type { LevelScene } from './levelEditor/types';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
 import './training/training.css';
 import './weatherLab/weatherLab.css';
+import './levelEditor/levelEditor.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -54,9 +58,13 @@ function App() {
   const [trainingResult, setTrainingResult] = useState<{ lessonId: string; score: number } | null>(null);
   const [showWeatherLab, setShowWeatherLab] = useState(false);
   const [weatherLabSceneId, setWeatherLabSceneId] = useState<string | null>(null);
+  const [showLevelEditor, setShowLevelEditor] = useState(false);
+  const [levelEditorLevelId, setLevelEditorLevelId] = useState<string | null>(null);
+  const [levelEditorResult, setLevelEditorResult] = useState<{ levelId: string; score: number; isWin: boolean } | null>(null);
   const [, setForceUpdate] = useState(0);
   const flightDataPointsRef = useRef<FlightDataPoint[]>([]);
   const flightDataLastSaveTimeRef = useRef<number>(0);
+  const levelEditorLevelIdRef = useRef<string | null>(null);
 
   const workshop = useWorkshop();
 
@@ -77,6 +85,10 @@ function App() {
   useEffect(() => {
     weatherLabSceneIdRef.current = weatherLabSceneId;
   }, [weatherLabSceneId]);
+
+  useEffect(() => {
+    levelEditorLevelIdRef.current = levelEditorLevelId;
+  }, [levelEditorLevelId]);
 
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -192,6 +204,26 @@ function App() {
       flightDataPointsRef.current = [];
     }
 
+    const currentLevelId = levelEditorLevelIdRef.current;
+    if (currentLevelId && gameEngineRef.current) {
+      const level = levelEditorEngine.getLevelById(currentLevelId);
+      if (level) {
+        const conditions = gameEngineRef.current.checkWinLoseConditions(level);
+        levelEditorEngine.recordLevelPlay(
+          currentLevelId,
+          adjustedScore,
+          conditions.isWin
+        );
+        setLevelEditorResult({
+          levelId: currentLevelId,
+          score: adjustedScore,
+          isWin: conditions.isWin,
+        });
+      }
+      levelEditorLevelIdRef.current = null;
+      setLevelEditorLevelId(null);
+    }
+
     setGameState('gameover');
   }, [workshop]);
 
@@ -278,6 +310,13 @@ function App() {
         weatherLabEngine.setCurrentScene(scene);
       }
     }
+    const currentLevelId = levelEditorLevelIdRef.current;
+    if (currentLevelId) {
+      const level = levelEditorEngine.getLevelById(currentLevelId);
+      if (level) {
+        levelEditorEngine.setCurrentLevel(level);
+      }
+    }
     lastScoreUpdateRef.current = 0;
     flightDataPointsRef.current = [];
     flightDataLastSaveTimeRef.current = 0;
@@ -299,7 +338,40 @@ function App() {
       setWeatherLabSceneId(null);
       flightDataPointsRef.current = [];
     }
+    if (levelEditorLevelIdRef.current) {
+      levelEditorLevelIdRef.current = null;
+      setLevelEditorLevelId(null);
+    }
     setGameState('menu');
+  };
+
+  const handleOpenLevelEditor = () => {
+    setShowLevelEditor(true);
+  };
+
+  const handleCloseLevelEditor = () => {
+    setShowLevelEditor(false);
+  };
+
+  const handleStartLevelEditorLevel = (level: LevelScene) => {
+    setLevelEditorLevelId(level.id);
+    levelEditorLevelIdRef.current = level.id;
+    levelEditorEngine.setCurrentLevel(level);
+    setShowLevelEditor(false);
+    lastScoreUpdateRef.current = 0;
+    flightDataPointsRef.current = [];
+    flightDataLastSaveTimeRef.current = 0;
+    setLevelEditorResult(null);
+
+    if (gameEngineRef.current) {
+      gameEngineRef.current.loadLevelScene(level);
+      gameEngineRef.current.setFlightParams({
+        ...workshop.flightParams,
+        maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + level.globalSettings.gravity)),
+        stabilityFactor: workshop.flightParams.stabilityFactor * (1 - level.globalSettings.turbulence * 0.3),
+      });
+      gameEngineRef.current.restart();
+    }
   };
 
   const handleOpenWorkshop = () => {
@@ -458,6 +530,7 @@ function App() {
           onTournament={handleOpenTournament}
           onTraining={handleOpenTraining}
           onWeatherLab={handleOpenWeatherLab}
+          onLevelEditor={handleOpenLevelEditor}
         />
       )}
 
@@ -521,6 +594,19 @@ function App() {
           onClose={handleCloseWeatherLab}
           onStartFlight={handleStartWeatherLabScene}
         />
+      )}
+
+      {showLevelEditor && (
+        <LevelEditorProvider>
+          <LevelEditor
+            onClose={handleCloseLevelEditor}
+            onStartLevel={handleStartLevelEditorLevel}
+            lastResult={levelEditorResult}
+            onClearResult={() => {
+              setLevelEditorResult(null);
+            }}
+          />
+        </LevelEditorProvider>
       )}
     </div>
   );

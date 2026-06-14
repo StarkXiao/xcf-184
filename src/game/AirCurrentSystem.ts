@@ -227,7 +227,11 @@ export class AirCurrentSystem {
 
     for (let i = this.airCurrents.length - 1; i >= 0; i--) {
       const current = this.airCurrents[i];
-      current.lifeTime += delta;
+
+      const isPermanent = current.lifeTime < 0;
+      if (!isPermanent) {
+        current.lifeTime += delta;
+      }
 
       const distance = Math.sqrt(
         (kitePosition.x - current.position.x) ** 2 +
@@ -246,7 +250,7 @@ export class AirCurrentSystem {
 
       this.updateVisual(current);
 
-      if (current.lifeTime > current.maxLifeTime) {
+      if (!isPermanent && current.lifeTime > current.maxLifeTime) {
         const mesh = this.visualMeshes.get(current.id);
         if (mesh) {
           this.scene.remove(mesh);
@@ -263,13 +267,15 @@ export class AirCurrentSystem {
     const mesh = this.visualMeshes.get(airCurrent.id);
     if (!mesh) return;
 
-    const lifeRatio = airCurrent.lifeTime / airCurrent.maxLifeTime;
-    const fadeFactor =
-      lifeRatio < 0.1
+    const isPermanent = airCurrent.lifeTime < 0;
+    const fadeFactor = isPermanent ? 1 : (() => {
+      const lifeRatio = airCurrent.lifeTime / airCurrent.maxLifeTime;
+      return lifeRatio < 0.1
         ? lifeRatio / 0.1
         : lifeRatio > 0.8
           ? (1 - lifeRatio) / 0.2
           : 1;
+    })();
 
     mesh.children.forEach((child) => {
       if (child instanceof THREE.Points) {
@@ -334,5 +340,10 @@ export class AirCurrentSystem {
       this.config.maxAirCurrentStrength = config.maxAirCurrentStrength;
     }
     this.clear();
+  }
+
+  public addPermanentAirCurrent(airCurrent: AirCurrent): void {
+    this.airCurrents.push(airCurrent);
+    this.createVisual(airCurrent);
   }
 }

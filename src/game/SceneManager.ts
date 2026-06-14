@@ -315,7 +315,7 @@ export class SceneManager {
     window.removeEventListener('resize', () => {});
   }
 
-  private clearBuildings(): void {
+  public clearBuildings(): void {
     this.buildings.forEach(({ mesh }) => {
       this.buildingGroup.remove(mesh);
       mesh.traverse((child) => {
@@ -330,6 +330,46 @@ export class SceneManager {
       });
     });
     this.buildings = [];
+  }
+
+  public addBuilding(building: Building): void {
+    const { position, width, height, depth, color } = building;
+
+    const geometry = new THREE.BoxGeometry(width, height, depth);
+    const material = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.7,
+      metalness: 0.2,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(position.x, position.y, position.z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    const roofHeight = Math.min(3, height * 0.1);
+    const roofGeometry = new THREE.BoxGeometry(
+      width * 0.9,
+      roofHeight,
+      depth * 0.9
+    );
+    const roofMaterial = new THREE.MeshStandardMaterial({
+      color: 0x3d3d3d,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+    roof.position.y = height / 2 + roofHeight / 2;
+    roof.castShadow = true;
+    roof.receiveShadow = true;
+    mesh.add(roof);
+
+    if (height > 10) {
+      this.addWindows(mesh, width, height, depth);
+    }
+
+    this.buildings.push({ mesh, data: building });
+    this.buildingGroup.add(mesh);
   }
 
   public reconfigure(config: GameConfig): void {

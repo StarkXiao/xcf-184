@@ -11,10 +11,13 @@ import type {
   GameStats,
   GameState,
   FlightParams,
+  Building,
+  AirCurrent,
 } from './types';
 import {
   DEFAULT_GAME_CONFIG,
 } from './types';
+import type { LevelScene, EditorBuilding, EditorAirCurrent } from '../levelEditor/types';
 
 export interface GameEngineCallbacks {
   onStatsUpdate: (stats: GameStats) => void;
@@ -412,5 +415,136 @@ export class GameEngine {
 
   public setWeatherConfig(config: Partial<import('./types').WeatherConfig>): void {
     this.weatherSystem.reconfigure(this.config.worldSize, config);
+  }
+
+  public loadLevelScene(level: LevelScene): void {
+    this.loadBuildings(level.buildings);
+    this.loadAirCurrents(level.airCurrents);
+    this.setStartPosition(level.startPosition);
+    this.setWeatherConfig({
+      windSpeed: level.globalSettings.gravity,
+      turbulenceLevel: level.globalSettings.turbulence,
+    });
+    this.config.gravity = level.globalSettings.gravity;
+  }
+
+  public loadBuildings(buildings: EditorBuilding[]): void {
+    this.sceneManager.clearBuildings();
+
+    const convertedBuildings: Building[] = buildings.map((b) => ({
+      id: b.id,
+      position: b.position,
+      width: b.size.x,
+      height: b.size.y,
+      depth: b.size.z,
+      color: b.color,
+    }));
+
+    convertedBuildings.forEach((building) => {
+      this.sceneManager.addBuilding(building);
+    });
+
+    this.collisionSystem = new CollisionSystem(this.sceneManager.buildings);
+  }
+
+  public loadAirCurrents(airCurrents: EditorAirCurrent[]): void {
+    this.airCurrentSystem.clear();
+
+    airCurrents.forEach((ac) => {
+      const converted: AirCurrent = {
+        id: ac.id,
+        position: ac.position,
+        radius: ac.radius,
+        strength: ac.strength,
+        direction: ac.direction,
+        type: ac.type,
+        lifeTime: -1,
+        maxLifeTime: -1,
+        shadowBrightness: 1,
+      };
+      this.airCurrentSystem.addPermanentAirCurrent(converted);
+    });
+  }
+
+  public setStartPosition(position: { x: number; y: number; z: number }): void {
+    if (this.kite) {
+      this.kite.group.position.set(position.x, position.y, position.z);
+      this.kite.reset();
+      this.startPosition.copy(this.kite.group.position);
+      this.previousKitePosition.copy(this.kite.group.position);
+    }
+  }
+
+  public checkWinLoseConditions(level: LevelScene): { isWin: boolean; isLose: boolean; reason?: string } {
+    const { winCondition, loseCondition, objectives } = level;
+    const stats = this.stats;
+
+    let isWin = false;
+    let isLose = false;
+    let reason: string | undefined;
+
+    const completedObjectives = objectives.filter((obj) => {
+      if (obj.completed) return true;
+      switch (obj.type) {
+        case 'reachPoint':
+          if (!obj.position || obj.radius === undefined) return false;
+          const dist = Math.sqrt(
+            Math.pow(this.kite.group.position.x - obj.position.x, 2) +
+            Math.pow(this.kite.group.position.y - obj.position.y, 2) +
+            Math.pow(this.kite.group.position.z - obj.position.z, 2)
+          );
+          return dist < obj.radius;
+        case 'scoreTarget':
+          return stats.score >= (obj.targetScore ?? obj.targetValue ?? 0);
+        case 'timeLimit':
+          return stats.time >= (obj.targetTime ?? obj.targetValue ?? 0);
+        case 'distanceTarget':
+          return stats.distance >= (obj.targetDistance ?? obj.targetValue ?? 0);
+        case 'heightTarget':
+          return stats.height >= (obj.targetHeight ?? obj.targetValue ?? 0);
+        default:
+          return false;
+      }
+    });
+
+    switch (winCondition.type) {
+      case 'allObjectives':
+        isWin = completedObjectives.length === objectives.length && objectives.length > 0;
+        if (isWin) reason = '所有目标已完成！';
+        break;
+      case 'anyObjective':
+        isWin = completedObjectives.length > 0;
+        if (isWin) reason = '目标已完成！';
+        break;
+      case 'scoreThreshold':
+        isWin = stats.score >= (winCondition.targetScore ?? 0);
+        if (isWin) reason = `达成目标分数 ${winCondition.targetScore}！`;
+        break;
+    }
+
+    if (loseCondition.enabled) {
+      switch (loseCondition.type) {
+        case 'timeOut':
+          if (stats.time >= (loseCondition.timeLimit ?? 0)) {
+            isLose = true;
+            reason = `时间超过 ${loseCondition.timeLimit} 秒`;
+          }
+          break;
+        case 'crash':
+          if (this.collisionSystem.checkGroundCollision(this.kite.group.position)) {
+            isLose = true;
+            reason = '坠毁了！';
+          }
+          break;
+        case 'scoreBelow':
+          if (stats.time >= (loseCondition.timeLimit ?? 30) && stats.score < (loseCondition.minScore ?? 0)) {
+            isLose = true;
+            reason = `分数低于 ${loseCondition.minScore}`;
+          }
+          break;
+      }
+    }
+
+    return { isWin, isLose, reason };
   }
 }
