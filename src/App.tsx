@@ -26,6 +26,9 @@ import type { TrajectoryPoint, FlightMode } from './journey/types';
 import { FestivalCenter } from './festival';
 import { festivalEngine } from './festival/festivalEngine';
 import { festivalStateEmitter } from './festival/useFestival';
+import { MapExploreCenter } from './mapExplore';
+import { mapExploreEngine } from './mapExplore/mapExploreEngine';
+import { mapExploreStateEmitter } from './mapExplore/useMapExplore';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
@@ -34,6 +37,7 @@ import './weatherLab/weatherLab.css';
 import './levelEditor/levelEditor.css';
 import './journey/journey.css';
 import './festival/festival.css';
+import './mapExplore/mapExplore.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -73,6 +77,8 @@ function App() {
   const [newJourneyAchievements, setNewJourneyAchievements] = useState<NewlyUnlockedAchievement[]>([]);
   const [showFestival, setShowFestival] = useState(false);
   const [festivalSceneId, setFestivalSceneId] = useState<string | null>(null);
+  const [showMapExplore, setShowMapExplore] = useState(false);
+  const [mapExploreRegionId, setMapExploreRegionId] = useState<string | null>(null);
   const [, setForceUpdate] = useState(0);
   const flightDataPointsRef = useRef<FlightDataPoint[]>([]);
   const flightDataLastSaveTimeRef = useRef<number>(0);
@@ -85,6 +91,7 @@ function App() {
   const trainingLessonIdRef = useRef<string | null>(null);
   const weatherLabSceneIdRef = useRef<string | null>(null);
   const festivalSceneIdRef = useRef<string | null>(null);
+  const mapExploreRegionIdRef = useRef<string | null>(null);
   const gameStateRef = useRef<GameState>('menu');
   const lastScoreUpdateRef = useRef(0);
 
@@ -107,6 +114,10 @@ function App() {
   useEffect(() => {
     festivalSceneIdRef.current = festivalSceneId;
   }, [festivalSceneId]);
+
+  useEffect(() => {
+    mapExploreRegionIdRef.current = mapExploreRegionId;
+  }, [mapExploreRegionId]);
 
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -336,6 +347,14 @@ function App() {
       setLevelEditorLevelId(null);
     }
 
+    const currentMapExploreRegionId = mapExploreRegionIdRef.current;
+    if (currentMapExploreRegionId) {
+      mapExploreEngine.recordFlightInRegion(currentMapExploreRegionId, gameOverStats, adjustedScore);
+      mapExploreRegionIdRef.current = null;
+      setMapExploreRegionId(null);
+      mapExploreStateEmitter.emit();
+    }
+
     const journeyTrajectory: TrajectoryPoint[] = savedFlightTrajectory.map((dp) => ({
       t: dp.timestamp,
       x: dp.position.x,
@@ -501,6 +520,11 @@ function App() {
       setFestivalSceneId(null);
       festivalStateEmitter.emit();
     }
+    if (mapExploreRegionIdRef.current) {
+      mapExploreRegionIdRef.current = null;
+      setMapExploreRegionId(null);
+      mapExploreStateEmitter.emit();
+    }
     gameEngineRef.current?.clearLevelScene();
     setGameState('menu');
   };
@@ -530,6 +554,51 @@ function App() {
 
   const handleCloseFestival = () => {
     setShowFestival(false);
+  };
+
+  const handleOpenMapExplore = () => {
+    setShowMapExplore(true);
+  };
+
+  const handleCloseMapExplore = () => {
+    setShowMapExplore(false);
+  };
+
+  const handleStartMapExploreFlight = (regionId: string) => {
+    const configOverride = mapExploreEngine.getGameConfigOverride(regionId);
+    if (!configOverride) return;
+
+    setMapExploreRegionId(regionId);
+    mapExploreRegionIdRef.current = regionId;
+    mapExploreEngine.setCurrentRegion(regionId);
+    setShowMapExplore(false);
+    lastScoreUpdateRef.current = 0;
+    flightDataPointsRef.current = [];
+    flightDataLastSaveTimeRef.current = 0;
+    mapExploreStateEmitter.emit();
+
+    if (gameEngineRef.current) {
+      gameEngineRef.current.reconfigure({
+        worldSize: configOverride.worldSize,
+        gravity: configOverride.gravity,
+        airCurrentSpawnRate: configOverride.airCurrentSpawnRate,
+        minAirCurrentStrength: configOverride.minAirCurrentStrength,
+        maxAirCurrentStrength: configOverride.maxAirCurrentStrength,
+        buildingDensity: configOverride.buildingDensity,
+        turbulenceLevel: configOverride.turbulenceLevel,
+        cloudCoverage: configOverride.cloudCoverage,
+      });
+
+      const gravity = configOverride.gravity ?? 0.015;
+      const turbulence = configOverride.turbulenceLevel ?? 0.2;
+      gameEngineRef.current.setFlightParams({
+        ...workshop.flightParams,
+        maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + gravity)),
+        stabilityFactor: workshop.flightParams.stabilityFactor * (1 - turbulence * 0.3),
+      });
+
+      gameEngineRef.current.restart();
+    }
   };
 
   const handleStartFestivalScene = (sceneId: string) => {
@@ -756,6 +825,7 @@ function App() {
           onLevelEditor={handleOpenLevelEditor}
           onJourney={handleOpenJourney}
           onFestival={handleOpenFestival}
+          onMapExplore={handleOpenMapExplore}
         />
       )}
 
@@ -845,6 +915,16 @@ function App() {
         <FestivalCenter
           onClose={handleCloseFestival}
           onStartScene={handleStartFestivalScene}
+          onAddCoins={(amount) => {
+            workshop.addCoins(amount);
+          }}
+        />
+      )}
+
+      {showMapExplore && (
+        <MapExploreCenter
+          onClose={handleCloseMapExplore}
+          onStartFlight={handleStartMapExploreFlight}
           onAddCoins={(amount) => {
             workshop.addCoins(amount);
           }}
