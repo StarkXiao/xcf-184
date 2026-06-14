@@ -49,6 +49,7 @@ export class GameEngine {
   private collisions = 0;
   private shadowTrackingAccumulator = 0;
   private shadowTrackingSamples = 0;
+  private currentLevel: LevelScene | null = null;
 
   constructor(
     container: HTMLElement,
@@ -147,6 +148,11 @@ export class GameEngine {
       this.sceneManager.scene,
       this.config
     );
+
+    if (this.currentLevel) {
+      this.loadAirCurrents(this.currentLevel.airCurrents);
+      this.setStartPosition(this.currentLevel.startPosition);
+    }
 
     this.stats = {
       score: 0,
@@ -265,6 +271,18 @@ export class GameEngine {
     if (this.collisionSystem.checkGroundCollision(this.kite.group.position)) {
       this.endGame();
       return;
+    }
+
+    if (this.currentLevel) {
+      const result = this.checkWinLoseConditions(this.currentLevel);
+      if (result.isWin) {
+        this.endGame();
+        return;
+      }
+      if (result.isLose && this.currentLevel.loseCondition.type !== 'crash') {
+        this.endGame();
+        return;
+      }
     }
 
     this.stats.height = this.kite.group.position.y;
@@ -418,14 +436,27 @@ export class GameEngine {
   }
 
   public loadLevelScene(level: LevelScene): void {
+    this.currentLevel = level;
     this.loadBuildings(level.buildings);
     this.loadAirCurrents(level.airCurrents);
     this.setStartPosition(level.startPosition);
-    this.setWeatherConfig({
-      windSpeed: level.globalSettings.gravity,
+    this.config.gravity = level.globalSettings.gravity;
+    this.config.turbulenceLevel = level.globalSettings.turbulence;
+    this.airCurrentSystem.reconfigure({
+      minAirCurrentStrength: 0,
+      maxAirCurrentStrength: 0,
+      airCurrentSpawnRate: 0,
       turbulenceLevel: level.globalSettings.turbulence,
     });
-    this.config.gravity = level.globalSettings.gravity;
+    this.weatherSystem.reconfigure(this.config.worldSize, {
+      windSpeed: level.globalSettings.windSpeed,
+      turbulenceLevel: level.globalSettings.turbulence,
+      ...level.weatherConfig,
+    });
+  }
+
+  public clearLevelScene(): void {
+    this.currentLevel = null;
   }
 
   public loadBuildings(buildings: EditorBuilding[]): void {
@@ -434,9 +465,9 @@ export class GameEngine {
     const convertedBuildings: Building[] = buildings.map((b) => ({
       id: b.id,
       position: b.position,
-      width: b.size.x,
-      height: b.size.y,
-      depth: b.size.z,
+      width: b.width,
+      height: b.height,
+      depth: b.depth,
       color: b.color,
     }));
 

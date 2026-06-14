@@ -342,6 +342,7 @@ function App() {
       levelEditorLevelIdRef.current = null;
       setLevelEditorLevelId(null);
     }
+    gameEngineRef.current?.clearLevelScene();
     setGameState('menu');
   };
 

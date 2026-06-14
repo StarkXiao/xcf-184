@@ -270,6 +270,20 @@ export class LevelEditorEngine {
       id: `building_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     };
 
+    if (!newBuilding.size && newBuilding.width && newBuilding.height && newBuilding.depth) {
+      newBuilding.size = {
+        x: newBuilding.width,
+        y: newBuilding.height,
+        z: newBuilding.depth,
+      };
+    }
+
+    if (!newBuilding.width && newBuilding.size) {
+      newBuilding.width = newBuilding.size.x;
+      newBuilding.height = newBuilding.size.y;
+      newBuilding.depth = newBuilding.size.z;
+    }
+
     this.state.currentLevel.buildings.push(newBuilding);
     this.state.currentLevel.updatedAt = Date.now();
     this.state.selectedBuildingId = newBuilding.id;
@@ -287,10 +301,26 @@ export class LevelEditorEngine {
     const index = this.state.currentLevel.buildings.findIndex((b) => b.id === buildingId);
     if (index === -1) return false;
 
-    this.state.currentLevel.buildings[index] = {
+    const updated = {
       ...this.state.currentLevel.buildings[index],
       ...updates,
     };
+
+    if (updates.width !== undefined || updates.height !== undefined || updates.depth !== undefined) {
+      updated.size = {
+        x: updated.width,
+        y: updated.height,
+        z: updated.depth,
+      };
+    }
+
+    if (updates.size !== undefined) {
+      updated.width = updates.size.x;
+      updated.height = updates.size.y;
+      updated.depth = updates.size.z;
+    }
+
+    this.state.currentLevel.buildings[index] = updated;
     this.state.currentLevel.updatedAt = Date.now();
 
     this.updateLevel(this.state.currentLevel.id, {
@@ -470,10 +500,16 @@ export class LevelEditorEngine {
       ...this.state.currentLevel.gameConfig,
       ...config,
     };
+
+    if (config.gravity !== undefined) {
+      this.state.currentLevel.globalSettings.gravity = config.gravity;
+    }
+
     this.state.currentLevel.updatedAt = Date.now();
 
     this.updateLevel(this.state.currentLevel.id, {
       gameConfig: this.state.currentLevel.gameConfig,
+      globalSettings: this.state.currentLevel.globalSettings,
     });
 
     return true;
@@ -486,10 +522,19 @@ export class LevelEditorEngine {
       ...this.state.currentLevel.weatherConfig,
       ...config,
     };
+
+    if (config.windSpeed !== undefined) {
+      this.state.currentLevel.globalSettings.windSpeed = config.windSpeed;
+    }
+    if (config.turbulenceLevel !== undefined) {
+      this.state.currentLevel.globalSettings.turbulence = config.turbulenceLevel;
+    }
+
     this.state.currentLevel.updatedAt = Date.now();
 
     this.updateLevel(this.state.currentLevel.id, {
       weatherConfig: this.state.currentLevel.weatherConfig,
+      globalSettings: this.state.currentLevel.globalSettings,
     });
 
     return true;
