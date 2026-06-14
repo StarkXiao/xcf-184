@@ -20,12 +20,16 @@ import type { WeatherScene, FlightDataPoint } from './weatherLab/types';
 import { LevelEditor, LevelEditorProvider } from './levelEditor';
 import { levelEditorEngine } from './levelEditor/levelEditorEngine';
 import type { LevelScene } from './levelEditor/types';
+import { JourneyCenter, useJourney } from './journey';
+import type { NewlyUnlockedAchievement } from './journey/journeyEngine';
+import type { TrajectoryPoint, FlightMode } from './journey/types';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
 import './training/training.css';
 import './weatherLab/weatherLab.css';
 import './levelEditor/levelEditor.css';
+import './journey/journey.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -61,12 +65,15 @@ function App() {
   const [showLevelEditor, setShowLevelEditor] = useState(false);
   const [levelEditorLevelId, setLevelEditorLevelId] = useState<string | null>(null);
   const [levelEditorResult, setLevelEditorResult] = useState<{ levelId: string; score: number; isWin: boolean } | null>(null);
+  const [showJourney, setShowJourney] = useState(false);
+  const [newJourneyAchievements, setNewJourneyAchievements] = useState<NewlyUnlockedAchievement[]>([]);
   const [, setForceUpdate] = useState(0);
   const flightDataPointsRef = useRef<FlightDataPoint[]>([]);
   const flightDataLastSaveTimeRef = useRef<number>(0);
   const levelEditorLevelIdRef = useRef<string | null>(null);
 
   const workshop = useWorkshop();
+  const journey = useJourney();
 
   const tournamentTrackIdRef = useRef<string | null>(null);
   const trainingLessonIdRef = useRef<string | null>(null);
@@ -128,6 +135,18 @@ function App() {
           flightDataPointsRef.current.push(dataPoint);
           if (flightDataPointsRef.current.length > 500) {
             flightDataPointsRef.current = flightDataPointsRef.current.slice(-500);
+          }
+        }
+      }
+    } else if (gameStateRef.current === 'playing') {
+      const now = Date.now();
+      if (now - flightDataLastSaveTimeRef.current >= 1000) {
+        flightDataLastSaveTimeRef.current = now;
+        const dataPoint = gameEngineRef.current?.getCurrentFlightDataPoint();
+        if (dataPoint) {
+          flightDataPointsRef.current.push(dataPoint);
+          if (flightDataPointsRef.current.length > 300) {
+            flightDataPointsRef.current = flightDataPointsRef.current.slice(-300);
           }
         }
       }
@@ -224,8 +243,82 @@ function App() {
       setLevelEditorLevelId(null);
     }
 
+    let flightMode: FlightMode = 'free';
+    let trackName: string | undefined;
+    let lessonName: string | undefined;
+    let sceneName: string | undefined;
+    let levelName: string | undefined;
+    let weatherCondition: string | undefined;
+
+    if (tournamentTrackIdRef.current) {
+      flightMode = 'tournament';
+      const track = tournamentEngine.getTrack(tournamentTrackIdRef.current);
+      trackName = track?.name;
+    } else if (trainingLessonIdRef.current) {
+      flightMode = 'training';
+      const lesson = trainingEngine.getLesson(trainingLessonIdRef.current);
+      lessonName = lesson?.title;
+    } else if (weatherLabSceneIdRef.current) {
+      flightMode = 'weatherLab';
+      const scene = weatherLabEngine.getSceneById(weatherLabSceneIdRef.current);
+      sceneName = scene?.name;
+      if (scene) {
+        const wc = scene.weatherConfig;
+        weatherCondition = wc
+          ? wc.cloudCoverage > 0.7
+            ? '多云'
+            : wc.turbulenceLevel > 0.4
+            ? '暴风'
+            : wc.cloudCoverage > 0.4
+            ? '晴间多云'
+            : '晴朗'
+          : undefined;
+      }
+    } else if (levelEditorLevelIdRef.current || levelEditorLevelId) {
+      flightMode = 'levelEditor';
+      const level = levelEditorEngine.getLevelById(levelEditorLevelIdRef.current || levelEditorLevelId || '');
+      levelName = level?.name;
+    }
+
+    const journeyTrajectory: TrajectoryPoint[] = flightDataPointsRef.current.map((dp) => ({
+      t: dp.timestamp,
+      x: dp.position.x,
+      y: dp.position.y,
+      z: dp.position.z,
+      vx: dp.velocity.x,
+      vy: dp.velocity.y,
+      vz: dp.velocity.z,
+      stability: dp.stability,
+      shadowTracking: dp.shadowTracking,
+    }));
+
+    const journeyResult = journey.recordFlight({
+      mode: flightMode,
+      stats: adjustedFinalStats,
+      adjustedScore,
+      earnedCoins: coins,
+      weatherCondition,
+      trackName,
+      lessonName,
+      sceneName,
+      levelName,
+      trajectory: journeyTrajectory.length > 0 ? journeyTrajectory : undefined,
+      equippedParts: workshop.equipped as unknown as Record<string, string | null>,
+    });
+
+    if (journeyResult.newAchievements.length > 0) {
+      setNewJourneyAchievements(journeyResult.newAchievements);
+      const achievementCoins = journeyResult.newAchievements.reduce(
+        (sum, a) => sum + a.rewardCoins, 0
+      );
+      if (achievementCoins > 0) {
+        workshop.addCoins(achievementCoins);
+        setEarnedCoins((prev) => prev + achievementCoins);
+      }
+    }
+
     setGameState('gameover');
-  }, [workshop]);
+  }, [workshop, journey]);
 
   useEffect(() => {
     if (!containerRef.current || isInitialized) return;
@@ -352,6 +445,17 @@ function App() {
 
   const handleCloseLevelEditor = () => {
     setShowLevelEditor(false);
+  };
+
+  const handleOpenJourney = () => {
+    setShowJourney(true);
+  };
+
+  const handleCloseJourney = () => {
+    setShowJourney(false);
+    if (newJourneyAchievements.length > 0) {
+      setNewJourneyAchievements([]);
+    }
   };
 
   const handleStartLevelEditorLevel = (level: LevelScene) => {
@@ -532,6 +636,7 @@ function App() {
           onTraining={handleOpenTraining}
           onWeatherLab={handleOpenWeatherLab}
           onLevelEditor={handleOpenLevelEditor}
+          onJourney={handleOpenJourney}
         />
       )}
 
@@ -608,6 +713,13 @@ function App() {
             }}
           />
         </LevelEditorProvider>
+      )}
+
+      {showJourney && (
+        <JourneyCenter
+          onClose={handleCloseJourney}
+          newAchievements={newJourneyAchievements}
+        />
       )}
     </div>
   );
