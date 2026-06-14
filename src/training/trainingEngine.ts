@@ -91,7 +91,7 @@ export class TrainingEngine {
     this.state.isTraining = true;
 
     const progress = this.state.lessons[lessonId];
-    if (progress) {
+    if (progress && progress.status !== 'completed') {
       progress.status = 'in_progress';
     }
 
