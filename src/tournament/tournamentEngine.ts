@@ -132,13 +132,13 @@ export class TournamentEngine {
     return prerequisiteProgress.status === 'completed' || prerequisiteProgress.status === 'mastered';
   }
 
-  public register(playerName: string): boolean {
+  public register(playerName: string, division: Division): boolean {
     if (this.state.status !== 'idle') return false;
 
     const entry: TournamentEntry = {
       id: `player_${Date.now()}`,
       playerName,
-      division: 'novice',
+      division,
       totalScore: 0,
       completedTracks: [],
       chapterProgress: { ...this.state.chapterProgress },

@@ -58,6 +58,7 @@ export interface GameStats {
   shadowTracking: number;
   flightStability: number;
   shadowBonus: number;
+  collisions: number;
 }
 
 export interface WeatherConfig {
@@ -91,6 +92,9 @@ export interface GameConfig {
   buildingDensity: number;
   shadowTrailLength: number;
   shadowTrackingTargetDistance: number;
+  windSpeed: number;
+  turbulenceLevel: number;
+  cloudCoverage: number;
   flightParams?: FlightParams;
 }
 
@@ -106,6 +110,9 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   buildingDensity: 0.3,
   shadowTrailLength: 40,
   shadowTrackingTargetDistance: 35,
+  windSpeed: 0.3,
+  turbulenceLevel: 0.2,
+  cloudCoverage: 0.5,
 };
 
 export const DEFAULT_WEATHER: WeatherConfig = {

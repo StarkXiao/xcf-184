@@ -66,6 +66,7 @@ export class GameEngine {
       shadowTracking: 0.5,
       flightStability: 1,
       shadowBonus: 0,
+      collisions: 0,
     };
   }
 
@@ -146,6 +147,7 @@ export class GameEngine {
       shadowTracking: 0.5,
       flightStability: 1,
       shadowBonus: 0,
+      collisions: 0,
     };
 
     this.startPosition.copy(this.kite.group.position);
@@ -275,6 +277,7 @@ export class GameEngine {
         this.collisions * 10
     );
     this.stats.score = Math.max(0, this.stats.score);
+    this.stats.collisions = this.collisions;
 
     this.sceneManager.updateCamera(this.kite.group.position);
     this.callbacks.onStatsUpdate(this.stats);
@@ -303,6 +306,25 @@ export class GameEngine {
 
   public getFlightParams(): FlightParams | undefined {
     return this.kite?.getFlightParams();
+  }
+
+  public reconfigure(config: Partial<GameConfig>): void {
+    this.config = { ...this.config, ...config };
+
+    this.sceneManager.reconfigure(this.config);
+    this.airCurrentSystem.reconfigure(config);
+    this.weatherSystem.reconfigure(this.config.worldSize, {
+      windSpeed: this.config.windSpeed,
+      cloudCoverage: this.config.cloudCoverage,
+      turbulenceLevel: this.config.turbulenceLevel,
+    });
+
+    this.collisionSystem = new CollisionSystem(this.sceneManager.buildings);
+    this.shadowTrackingSystem.clear();
+    this.shadowTrackingSystem = new ShadowTrackingSystem(
+      this.sceneManager.scene,
+      this.config
+    );
   }
 
   public destroy(): void {

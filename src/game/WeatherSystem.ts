@@ -84,6 +84,7 @@ export class WeatherSystem {
   }
 
   public update(_delta: number): void {
+    void _delta;
     for (let i = this.clouds.length - 1; i >= 0; i--) {
       const cloud = this.clouds[i];
       const speed = this.config.windSpeed * cloud.speed;
@@ -180,5 +181,16 @@ export class WeatherSystem {
     });
     this.clouds = [];
     this.cloudMeshes.clear();
+  }
+
+  public reconfigure(worldSize: number, config: Partial<WeatherConfig>): void {
+    this.worldSize = worldSize;
+    if (config.windSpeed !== undefined) this.config.windSpeed = config.windSpeed;
+    if (config.cloudCoverage !== undefined) this.config.cloudCoverage = config.cloudCoverage;
+    if (config.turbulenceLevel !== undefined) this.config.turbulenceLevel = config.turbulenceLevel;
+    if (config.windDirection !== undefined) this.config.windDirection = config.windDirection;
+
+    this.clear();
+    this.initClouds();
   }
 }

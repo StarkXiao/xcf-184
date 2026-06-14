@@ -29,8 +29,8 @@ export function useTournament() {
     setRankings(tournamentEngine.getRankings());
   }, []);
 
-  const register = useCallback((playerName: string): boolean => {
-    const success = tournamentEngine.register(playerName);
+  const register = useCallback((playerName: string, division: Division): boolean => {
+    const success = tournamentEngine.register(playerName, division);
     if (success) {
       tournamentEngine.saveToLocalStorage();
       refreshState();

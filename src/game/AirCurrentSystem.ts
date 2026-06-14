@@ -159,7 +159,7 @@ export class AirCurrentSystem {
     recommendedPosition: Vector3 | null,
     shadowBrightness: number
   ): Vector3 {
-    let totalForce: Vector3 = { x: 0, y: 0, z: 0 };
+    const totalForce: Vector3 = { x: 0, y: 0, z: 0 };
 
     const spawnRate = this.config.airCurrentSpawnRate * (0.8 + shadowBrightness * 0.8);
 
@@ -321,5 +321,18 @@ export class AirCurrentSystem {
     });
     this.airCurrents = [];
     this.visualMeshes.clear();
+  }
+
+  public reconfigure(config: Partial<GameConfig>): void {
+    if (config.airCurrentSpawnRate !== undefined) {
+      this.config.airCurrentSpawnRate = config.airCurrentSpawnRate;
+    }
+    if (config.minAirCurrentStrength !== undefined) {
+      this.config.minAirCurrentStrength = config.minAirCurrentStrength;
+    }
+    if (config.maxAirCurrentStrength !== undefined) {
+      this.config.maxAirCurrentStrength = config.maxAirCurrentStrength;
+    }
+    this.clear();
   }
 }

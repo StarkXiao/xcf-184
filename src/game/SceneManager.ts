@@ -314,4 +314,32 @@ export class SceneManager {
     this.renderer.dispose();
     window.removeEventListener('resize', () => {});
   }
+
+  private clearBuildings(): void {
+    this.buildings.forEach(({ mesh }) => {
+      this.buildingGroup.remove(mesh);
+      mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m) => m.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      });
+    });
+    this.buildings = [];
+  }
+
+  public reconfigure(config: GameConfig): void {
+    this.config = config;
+    this.clearBuildings();
+    this.initBuildings();
+
+    if (this.scene.fog instanceof THREE.Fog) {
+      this.scene.fog.near = config.worldSize * 0.4;
+      this.scene.fog.far = config.worldSize * 1.2;
+    }
+  }
 }

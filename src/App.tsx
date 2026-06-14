@@ -24,6 +24,7 @@ const DEFAULT_STATS: GameStats = {
   shadowTracking: 0.5,
   flightStability: 1,
   shadowBonus: 0,
+  collisions: 0,
 };
 
 function App() {
@@ -41,10 +42,29 @@ function App() {
   const [tournamentResult, setTournamentResult] = useState<{ trackId: string; score: number } | null>(null);
 
   const workshop = useWorkshop();
+  const lastScoreUpdateRef = useRef(0);
 
   const handleStatsUpdate = useCallback((newStats: GameStats) => {
     setStats(newStats);
-  }, []);
+
+    if (tournamentTrackId && gameState === 'playing') {
+      const now = Date.now();
+      if (now - lastScoreUpdateRef.current >= 250) {
+        lastScoreUpdateRef.current = now;
+        const adjustedScore = workshop.calculateFinalScore(newStats.score);
+        tournamentEngine.updateLiveScoreFromGameStats(
+          newStats.distance,
+          newStats.maxHeight,
+          newStats.airCurrentCount,
+          newStats.shadowTracking,
+          newStats.flightStability,
+          newStats.collisions,
+          newStats.time,
+        );
+        tournamentEngine.addScoringEvent('checkpoint', Math.floor(adjustedScore * 0.02), '累计得分奖励');
+      }
+    }
+  }, [tournamentTrackId, gameState, workshop]);
 
   const handleStateChange = useCallback((state: GameState) => {
     setGameState(state);
@@ -175,18 +195,29 @@ function App() {
 
     setTournamentTrackId(trackId);
     setShowTournament(false);
+    lastScoreUpdateRef.current = 0;
 
-    if (gameEngineRef.current) {
-      if (configOverride) {
-        gameEngineRef.current.restart();
-        gameEngineRef.current.setFlightParams({
-          ...workshop.flightParams,
-          maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + configOverride.gravity)),
-          stabilityFactor: workshop.flightParams.stabilityFactor * (1 - configOverride.turbulenceLevel * 0.3),
-        });
-      } else {
-        gameEngineRef.current.restart();
-      }
+    if (gameEngineRef.current && configOverride) {
+      gameEngineRef.current.reconfigure({
+        worldSize: configOverride.worldSize,
+        gravity: configOverride.gravity,
+        airCurrentSpawnRate: configOverride.airCurrentSpawnRate,
+        minAirCurrentStrength: configOverride.minAirCurrentStrength,
+        maxAirCurrentStrength: configOverride.maxAirCurrentStrength,
+        minBuildingHeight: configOverride.minBuildingHeight,
+        maxBuildingHeight: configOverride.maxBuildingHeight,
+        buildingDensity: configOverride.buildingDensity,
+        cloudCoverage: configOverride.cloudCoverage,
+        turbulenceLevel: configOverride.turbulenceLevel,
+      });
+
+      gameEngineRef.current.setFlightParams({
+        ...workshop.flightParams,
+        maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + configOverride.gravity)),
+        stabilityFactor: workshop.flightParams.stabilityFactor * (1 - configOverride.turbulenceLevel * 0.3),
+      });
+
+      gameEngineRef.current.restart();
     }
   };
 

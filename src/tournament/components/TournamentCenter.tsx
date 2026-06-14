@@ -6,6 +6,7 @@ import { TrackSelection } from './TrackSelection';
 import { LiveScoreboard } from './LiveScoreboard';
 import { RankingBoard } from './RankingBoard';
 import { TournamentResult } from './TournamentResult';
+import type { Division } from '../types';
 
 type TabId = 'register' | 'chapters' | 'tracks' | 'live' | 'ranking';
 
@@ -34,8 +35,8 @@ export const TournamentCenter: React.FC<TournamentCenterProps> = ({
   const lastResultData = lastResult ? tournament.getTrackResult(lastResult.trackId) : null;
   const lastResultTrack = lastResult ? tournament.getTrack(lastResult.trackId) : null;
 
-  const handleRegister = (playerName: string): boolean => {
-    const success = tournament.register(playerName);
+  const handleRegister = (playerName: string, division: Division): boolean => {
+    const success = tournament.register(playerName, division);
     if (success) {
       setActiveTab('chapters');
     }

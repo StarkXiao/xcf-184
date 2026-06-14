@@ -4,7 +4,7 @@ import { DIVISION_NAMES } from '../types';
 
 interface RegistrationPanelProps {
   divisions: DivisionConfig[];
-  onRegister: (playerName: string) => boolean;
+  onRegister: (playerName: string, division: Division) => boolean;
 }
 
 export const RegistrationPanel: React.FC<RegistrationPanelProps> = ({
@@ -16,7 +16,7 @@ export const RegistrationPanel: React.FC<RegistrationPanelProps> = ({
 
   const handleSubmit = () => {
     if (!playerName.trim()) return;
-    onRegister(playerName.trim());
+    onRegister(playerName.trim(), selectedDivision);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
