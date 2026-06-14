@@ -338,4 +338,58 @@ export class GameEngine {
     this.flightController.dispose();
     this.sceneManager.dispose();
   }
+
+  public getCurrentFlightDataPoint() {
+    if (!this.kite) return null;
+
+    const windForce = this.weatherSystem.getWindForce();
+    const position = this.kite.getPosition();
+
+    return {
+      timestamp: this.stats.time,
+      position: {
+        x: position.x,
+        y: position.y,
+        z: position.z,
+      },
+      velocity: {
+        x: this.kite.velocity.x,
+        y: this.kite.velocity.y,
+        z: this.kite.velocity.z,
+      },
+      rotation: {
+        x: this.kite.rotation.x,
+        y: this.kite.rotation.y,
+        z: this.kite.rotation.z,
+      },
+      windForce: {
+        x: windForce.x,
+        y: windForce.y,
+        z: windForce.z,
+      },
+      airCurrentForce: {
+        x: 0,
+        y: 0,
+        z: 0,
+      },
+      stability: this.stats.flightStability,
+      shadowTracking: this.stats.shadowTracking,
+    };
+  }
+
+  public getWeatherConfig() {
+    return this.weatherSystem.config;
+  }
+
+  public getWindField() {
+    return {
+      windSpeed: this.weatherSystem.config.windSpeed,
+      windDirection: { ...this.weatherSystem.config.windDirection },
+      turbulenceLevel: this.weatherSystem.config.turbulenceLevel,
+      gustStrength: 0.1,
+      gustFrequency: 0.05,
+      shearFactor: 0.02,
+      boundaryLayerHeight: 50,
+    };
+  }
 }

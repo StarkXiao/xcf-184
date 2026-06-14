@@ -14,10 +14,14 @@ import { tournamentStateEmitter } from './tournament/useTournament';
 import { TrainingCenter } from './training';
 import { trainingEngine } from './training/trainingEngine';
 import { trainingStateEmitter } from './training/useTraining';
+import { WeatherLab } from './weatherLab';
+import { weatherLabEngine } from './weatherLab/weatherLabEngine';
+import type { WeatherScene, FlightDataPoint } from './weatherLab/types';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
 import './training/training.css';
+import './weatherLab/weatherLab.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -48,12 +52,17 @@ function App() {
   const [tournamentResult, setTournamentResult] = useState<{ trackId: string; score: number } | null>(null);
   const [trainingLessonId, setTrainingLessonId] = useState<string | null>(null);
   const [trainingResult, setTrainingResult] = useState<{ lessonId: string; score: number } | null>(null);
+  const [showWeatherLab, setShowWeatherLab] = useState(false);
+  const [weatherLabSceneId, setWeatherLabSceneId] = useState<string | null>(null);
   const [, setForceUpdate] = useState(0);
+  const flightDataPointsRef = useRef<FlightDataPoint[]>([]);
+  const flightDataLastSaveTimeRef = useRef<number>(0);
 
   const workshop = useWorkshop();
 
   const tournamentTrackIdRef = useRef<string | null>(null);
   const trainingLessonIdRef = useRef<string | null>(null);
+  const weatherLabSceneIdRef = useRef<string | null>(null);
   const gameStateRef = useRef<GameState>('menu');
   const lastScoreUpdateRef = useRef(0);
 
@@ -64,6 +73,10 @@ function App() {
   useEffect(() => {
     trainingLessonIdRef.current = trainingLessonId;
   }, [trainingLessonId]);
+
+  useEffect(() => {
+    weatherLabSceneIdRef.current = weatherLabSceneId;
+  }, [weatherLabSceneId]);
 
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -90,6 +103,21 @@ function App() {
         tournamentEngine.addScoringEvent('checkpoint', Math.floor(adjustedScore * 0.02), '累计得分奖励');
         tournamentStateEmitter.emit();
         setForceUpdate((n) => n + 1);
+      }
+    }
+
+    const currentWeatherSceneId = weatherLabSceneIdRef.current;
+    if (currentWeatherSceneId && gameStateRef.current === 'playing') {
+      const now = Date.now();
+      if (now - flightDataLastSaveTimeRef.current >= 500) {
+        flightDataLastSaveTimeRef.current = now;
+        const dataPoint = gameEngineRef.current?.getCurrentFlightDataPoint();
+        if (dataPoint) {
+          flightDataPointsRef.current.push(dataPoint);
+          if (flightDataPointsRef.current.length > 500) {
+            flightDataPointsRef.current = flightDataPointsRef.current.slice(-500);
+          }
+        }
       }
     }
   }, [workshop]);
@@ -136,6 +164,32 @@ function App() {
       trainingLessonIdRef.current = null;
       setTrainingLessonId(null);
       trainingStateEmitter.emit();
+    }
+
+    const currentWeatherSceneId = weatherLabSceneIdRef.current;
+    if (currentWeatherSceneId && gameEngineRef.current) {
+      const scene = weatherLabEngine.getSceneById(currentWeatherSceneId);
+      if (scene) {
+        const weatherConfig = gameEngineRef.current.getWeatherConfig();
+        const windField = gameEngineRef.current.getWindField();
+        const flightParams = gameEngineRef.current.getFlightParams();
+
+        weatherLabEngine.createFlightRecord(
+          currentWeatherSceneId,
+          scene.name,
+          gameOverStats,
+          weatherConfig,
+          windField,
+          flightDataPointsRef.current,
+          flightParams ? {
+            equippedParts: workshop.equipped as unknown as Record<string, string | null>,
+            flightParams: flightParams as unknown as Record<string, number>,
+          } : undefined
+        );
+      }
+      weatherLabSceneIdRef.current = null;
+      setWeatherLabSceneId(null);
+      flightDataPointsRef.current = [];
     }
 
     setGameState('gameover');
@@ -217,7 +271,16 @@ function App() {
         trainingStateEmitter.emit();
       }
     }
+    const currentWeatherSceneId = weatherLabSceneIdRef.current;
+    if (currentWeatherSceneId) {
+      const scene = weatherLabEngine.getSceneById(currentWeatherSceneId);
+      if (scene) {
+        weatherLabEngine.setCurrentScene(scene);
+      }
+    }
     lastScoreUpdateRef.current = 0;
+    flightDataPointsRef.current = [];
+    flightDataLastSaveTimeRef.current = 0;
     gameEngineRef.current?.restart();
   };
 
@@ -230,6 +293,11 @@ function App() {
     if (trainingLessonIdRef.current) {
       trainingLessonIdRef.current = null;
       setTrainingLessonId(null);
+    }
+    if (weatherLabSceneIdRef.current) {
+      weatherLabSceneIdRef.current = null;
+      setWeatherLabSceneId(null);
+      flightDataPointsRef.current = [];
     }
     setGameState('menu');
   };
@@ -335,6 +403,49 @@ function App() {
     }
   };
 
+  const handleOpenWeatherLab = () => {
+    setShowWeatherLab(true);
+  };
+
+  const handleCloseWeatherLab = () => {
+    setShowWeatherLab(false);
+  };
+
+  const handleStartWeatherLabScene = (scene: WeatherScene) => {
+    const configOverride = weatherLabEngine.getGameConfigOverride(scene);
+    setWeatherLabSceneId(scene.id);
+    weatherLabSceneIdRef.current = scene.id;
+    setShowWeatherLab(false);
+    lastScoreUpdateRef.current = 0;
+    flightDataPointsRef.current = [];
+    flightDataLastSaveTimeRef.current = 0;
+
+    if (gameEngineRef.current && configOverride) {
+      gameEngineRef.current.reconfigure({
+        worldSize: configOverride.worldSize,
+        gravity: configOverride.gravity,
+        airCurrentSpawnRate: configOverride.airCurrentSpawnRate,
+        minAirCurrentStrength: configOverride.minAirCurrentStrength,
+        maxAirCurrentStrength: configOverride.maxAirCurrentStrength,
+        minBuildingHeight: configOverride.minBuildingHeight,
+        maxBuildingHeight: configOverride.maxBuildingHeight,
+        buildingDensity: configOverride.buildingDensity,
+        cloudCoverage: configOverride.cloudCoverage,
+        turbulenceLevel: configOverride.turbulenceLevel,
+      });
+
+      gameEngineRef.current.setFlightParams({
+        ...workshop.flightParams,
+        maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + (configOverride.gravity ?? 0.015))),
+        stabilityFactor: workshop.flightParams.stabilityFactor * (1 - (configOverride.turbulenceLevel ?? 0.2) * 0.3),
+      });
+
+      gameEngineRef.current.restart();
+    } else if (gameEngineRef.current) {
+      gameEngineRef.current.restart();
+    }
+  };
+
   return (
     <div className="game-wrapper">
       <div
@@ -349,6 +460,7 @@ function App() {
           onWorkshop={handleOpenWorkshop}
           onTournament={handleOpenTournament}
           onTraining={handleOpenTraining}
+          onWeatherLab={handleOpenWeatherLab}
         />
       )}
 
@@ -404,6 +516,13 @@ function App() {
             setTrainingResult(null);
             trainingStateEmitter.emit();
           }}
+        />
+      )}
+
+      {showWeatherLab && (
+        <WeatherLab
+          onClose={handleCloseWeatherLab}
+          onStartFlight={handleStartWeatherLabScene}
         />
       )}
     </div>
