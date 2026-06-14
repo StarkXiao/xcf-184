@@ -10,6 +10,7 @@ import type {
   GameConfig,
   GameStats,
   GameState,
+  FlightParams,
 } from './types';
 import {
   DEFAULT_GAME_CONFIG,
@@ -288,6 +289,20 @@ export class GameEngine {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
+  }
+
+  public setFlightParams(params: FlightParams): void {
+    if (this.kite) {
+      this.kite.setFlightParams(params);
+    }
+    this.config = {
+      ...this.config,
+      flightParams: params,
+    };
+  }
+
+  public getFlightParams(): FlightParams | undefined {
+    return this.kite?.getFlightParams();
   }
 
   public destroy(): void {

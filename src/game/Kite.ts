@@ -1,5 +1,16 @@
 import * as THREE from 'three';
-import type { GameConfig, Vector3 } from './types';
+import type { GameConfig, Vector3, FlightParams } from './types';
+
+const DEFAULT_FLIGHT_PARAMS: FlightParams = {
+  maxSpeed: 1.2,
+  acceleration: 0.5,
+  liftForce: 0.015,
+  dragCoefficient: 0.98,
+  stabilityFactor: 1.0,
+  windResponse: 1.0,
+  maxAltitude: 300,
+  turnRate: 1.0,
+};
 
 export class Kite {
   public group: THREE.Group;
@@ -10,10 +21,12 @@ export class Kite {
   public velocity: THREE.Vector3;
   public rotation: THREE.Vector3;
   private config: GameConfig;
+  private flightParams: FlightParams;
   private tailSegments: THREE.Vector3[] = [];
 
   constructor(config: GameConfig) {
     this.config = config;
+    this.flightParams = config.flightParams ?? { ...DEFAULT_FLIGHT_PARAMS };
     this.velocity = new THREE.Vector3(0, 0, 0);
     this.rotation = new THREE.Vector3(0, 0, 0);
 
@@ -163,29 +176,42 @@ export class Kite {
     flightStability: number = 1,
     trackingScore: number = 0.5
   ): void {
-    const stabilityFactor = 0.7 + flightStability * 0.5;
+    const fp = this.flightParams;
+
+    const combinedStability = (0.7 + flightStability * 0.5) * fp.stabilityFactor;
     const trackingBoost = 1 + trackingScore * 0.3;
 
+    const effectiveAccel = fp.acceleration * this.config.kiteSpeed * 2;
+
     const acceleration = new THREE.Vector3(
-      input.x * this.config.kiteSpeed * stabilityFactor * trackingBoost,
-      input.y * this.config.kiteSpeed * 0.8 * stabilityFactor,
-      -input.z * this.config.kiteSpeed * stabilityFactor * trackingBoost
+      input.x * effectiveAccel * combinedStability * trackingBoost,
+      input.y * effectiveAccel * 0.8 * combinedStability * (1 + fp.liftForce * 20),
+      -input.z * effectiveAccel * combinedStability * trackingBoost * fp.turnRate
     );
 
     this.velocity.add(acceleration.multiplyScalar(delta));
-    this.velocity.y -= gravity * (1 - trackingScore * 0.2);
 
-    const dragFactor = 0.98 - flightStability * 0.015;
+    const liftOffset = fp.liftForce * 1.5;
+    const gravityEffect = gravity * (1 - trackingScore * 0.2 - liftOffset);
+    this.velocity.y -= gravityEffect;
+
+    const baseDrag = fp.dragCoefficient;
+    const stabilityDrag = flightStability * 0.015;
+    const dragFactor = Math.min(0.995, baseDrag - stabilityDrag);
     this.velocity.multiplyScalar(dragFactor);
 
-    const maxSpeed = 1.2 + flightStability * 0.6 + trackingScore * 0.3;
+    const baseMaxSpeed = fp.maxSpeed;
+    const stabilityBonus = flightStability * 0.6;
+    const trackingBonus = trackingScore * 0.3;
+    const maxSpeed = baseMaxSpeed + stabilityBonus + trackingBonus;
     if (this.velocity.length() > maxSpeed) {
       this.velocity.setLength(maxSpeed);
     }
 
     this.group.position.add(this.velocity);
 
-    this.group.position.y = Math.max(5, this.group.position.y);
+    const maxAltitude = fp.maxAltitude;
+    this.group.position.y = Math.max(5, Math.min(maxAltitude, this.group.position.y));
 
     const boundary = this.config.worldSize;
     this.group.position.x = Math.max(
@@ -197,13 +223,15 @@ export class Kite {
       Math.min(boundary, this.group.position.z)
     );
 
-    const targetRotationX = -this.velocity.y * 0.5;
-    const targetRotationZ = -this.velocity.x * 0.3;
-    const targetRotationY = this.velocity.z * 0.2;
+    const turnMultiplier = fp.turnRate;
+    const targetRotationX = -this.velocity.y * 0.5 * turnMultiplier;
+    const targetRotationZ = -this.velocity.x * 0.3 * turnMultiplier;
+    const targetRotationY = this.velocity.z * 0.2 * turnMultiplier;
 
-    this.rotation.x += (targetRotationX - this.rotation.x) * 0.1;
-    this.rotation.y += (targetRotationY - this.rotation.y) * 0.1;
-    this.rotation.z += (targetRotationZ - this.rotation.z) * 0.1;
+    const rotationSmooth = 0.1 * fp.stabilityFactor;
+    this.rotation.x += (targetRotationX - this.rotation.x) * rotationSmooth;
+    this.rotation.y += (targetRotationY - this.rotation.y) * rotationSmooth;
+    this.rotation.z += (targetRotationZ - this.rotation.z) * rotationSmooth;
 
     this.mesh.rotation.x = this.rotation.x;
     this.mesh.rotation.y = this.rotation.y;
@@ -298,9 +326,11 @@ export class Kite {
   }
 
   public applyAirCurrent(force: Vector3, trackingScore: number = 0.5, flightStability: number = 1): void {
+    const fp = this.flightParams;
     const trackingMultiplier = 0.7 + trackingScore * 0.8;
     const stabilityMultiplier = 0.8 + flightStability * 0.4;
-    const multiplier = trackingMultiplier * stabilityMultiplier;
+    const windMultiplier = fp.windResponse;
+    const multiplier = trackingMultiplier * stabilityMultiplier * windMultiplier;
 
     this.velocity.x += force.x * multiplier;
     this.velocity.y += force.y * multiplier;
@@ -313,6 +343,14 @@ export class Kite {
 
   public getVelocity(): THREE.Vector3 {
     return this.velocity.clone();
+  }
+
+  public setFlightParams(params: FlightParams): void {
+    this.flightParams = { ...params };
+  }
+
+  public getFlightParams(): FlightParams {
+    return { ...this.flightParams };
   }
 
   public reset(): void {

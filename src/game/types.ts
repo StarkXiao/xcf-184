@@ -68,6 +68,17 @@ export interface WeatherConfig {
   turbulenceLevel: number;
 }
 
+export interface FlightParams {
+  maxSpeed: number;
+  acceleration: number;
+  liftForce: number;
+  dragCoefficient: number;
+  stabilityFactor: number;
+  windResponse: number;
+  maxAltitude: number;
+  turnRate: number;
+}
+
 export interface GameConfig {
   worldSize: number;
   kiteSpeed: number;
@@ -80,6 +91,7 @@ export interface GameConfig {
   buildingDensity: number;
   shadowTrailLength: number;
   shadowTrackingTargetDistance: number;
+  flightParams?: FlightParams;
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {

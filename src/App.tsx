@@ -65,6 +65,11 @@ function App() {
   useEffect(() => {
     if (!containerRef.current || isInitialized) return;
 
+    const initialConfig = {
+      ...DEFAULT_GAME_CONFIG,
+      flightParams: workshop.flightParams,
+    };
+
     const engine = new GameEngine(
       containerRef.current,
       {
@@ -72,7 +77,7 @@ function App() {
         onStateChange: handleStateChange,
         onGameOver: handleGameOver,
       },
-      DEFAULT_GAME_CONFIG
+      initialConfig
     );
 
     engine.init();
@@ -83,7 +88,13 @@ function App() {
       engine.destroy();
       gameEngineRef.current = null;
     };
-  }, [handleStatsUpdate, handleStateChange, handleGameOver, isInitialized]);
+  }, [handleStatsUpdate, handleStateChange, handleGameOver, isInitialized, workshop.flightParams]);
+
+  useEffect(() => {
+    if (gameEngineRef.current && isInitialized) {
+      gameEngineRef.current.setFlightParams(workshop.flightParams);
+    }
+  }, [workshop.flightParams, isInitialized]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
