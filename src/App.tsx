@@ -8,8 +8,11 @@ import { PauseMenu } from './components/PauseMenu';
 import { GameOverScreen } from './components/GameOverScreen';
 import { Workshop } from './workshop/components/Workshop';
 import { useWorkshop } from './workshop/useWorkshop';
+import { TournamentCenter } from './tournament';
+import { tournamentEngine } from './tournament/tournamentEngine';
 import './App.css';
 import './workshop/workshop.css';
+import './tournament/tournament.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -31,8 +34,11 @@ function App() {
   const [finalStats, setFinalStats] = useState<GameStats>(DEFAULT_STATS);
   const [isInitialized, setIsInitialized] = useState(false);
   const [showWorkshop, setShowWorkshop] = useState(false);
+  const [showTournament, setShowTournament] = useState(false);
   const [adjustedFinalStats, setAdjustedFinalStats] = useState<GameStats>(DEFAULT_STATS);
   const [earnedCoins, setEarnedCoins] = useState(0);
+  const [tournamentTrackId, setTournamentTrackId] = useState<string | null>(null);
+  const [tournamentResult, setTournamentResult] = useState<{ trackId: string; score: number } | null>(null);
 
   const workshop = useWorkshop();
 
@@ -59,8 +65,17 @@ function App() {
     setEarnedCoins(coins);
 
     workshop.addCoins(coins);
+
+    if (tournamentTrackId) {
+      const result = tournamentEngine.completeTrack(adjustedScore);
+      if (result) {
+        setTournamentResult({ trackId: tournamentTrackId, score: result.score });
+      }
+      setTournamentTrackId(null);
+    }
+
     setGameState('gameover');
-  }, [workshop]);
+  }, [workshop, tournamentTrackId]);
 
   useEffect(() => {
     if (!containerRef.current || isInitialized) return;
@@ -145,6 +160,36 @@ function App() {
     gameEngineRef.current?.restart();
   };
 
+  const handleOpenTournament = () => {
+    setShowTournament(true);
+  };
+
+  const handleCloseTournament = () => {
+    setShowTournament(false);
+  };
+
+  const handleStartTournamentTrack = (trackId: string) => {
+    const configOverride = tournamentEngine.getGameConfigOverride(trackId);
+    const success = tournamentEngine.selectTrack(trackId);
+    if (!success) return;
+
+    setTournamentTrackId(trackId);
+    setShowTournament(false);
+
+    if (gameEngineRef.current) {
+      if (configOverride) {
+        gameEngineRef.current.restart();
+        gameEngineRef.current.setFlightParams({
+          ...workshop.flightParams,
+          maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + configOverride.gravity)),
+          stabilityFactor: workshop.flightParams.stabilityFactor * (1 - configOverride.turbulenceLevel * 0.3),
+        });
+      } else {
+        gameEngineRef.current.restart();
+      }
+    }
+  };
+
   return (
     <div className="game-wrapper">
       <div
@@ -154,7 +199,7 @@ function App() {
       />
 
       {gameState === 'menu' && (
-        <MainMenu onStart={handleStart} onWorkshop={handleOpenWorkshop} />
+        <MainMenu onStart={handleStart} onWorkshop={handleOpenWorkshop} onTournament={handleOpenTournament} />
       )}
 
       {gameState === 'playing' && (
@@ -185,6 +230,15 @@ function App() {
         <Workshop
           onClose={handleCloseWorkshop}
           onStartGame={handleStartFromWorkshop}
+        />
+      )}
+
+      {showTournament && (
+        <TournamentCenter
+          onClose={handleCloseTournament}
+          onStartTrack={handleStartTournamentTrack}
+          lastResult={tournamentResult}
+          onClearResult={() => setTournamentResult(null)}
         />
       )}
     </div>

@@ -781,6 +781,34 @@
   transform: translateY(0);
 }
 
+.tournament-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+  border: none;
+  border-radius: 12px;
+  color: #1a1a2e;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 6px 20px rgba(255, 215, 0, 0.3);
+  margin-top: 12px;
+}
+
+.tournament-menu-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(255, 215, 0, 0.4);
+}
+
+.tournament-menu-button:active {
+  transform: translateY(0);
+}
+
 .score-bonus-info {
   display: flex;
   justify-content: center;

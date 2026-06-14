@@ -3,9 +3,10 @@ import React from 'react';
 interface MainMenuProps {
   onStart: () => void;
   onWorkshop: () => void;
+  onTournament: () => void;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop, onTournament }) => {
   return (
     <div className="menu-overlay">
       <div className="menu-content">
@@ -96,6 +97,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop }) => {
         <button className="workshop-menu-button" onClick={onWorkshop}>
           <span className="button-icon">🛠️</span>
           <span className="button-text">风筝改装工坊</span>
+        </button>
+
+        <button className="tournament-menu-button" onClick={onTournament}>
+          <span className="button-icon">🏆</span>
+          <span className="button-text">赛事中心</span>
         </button>
 
         <div className="tips">
