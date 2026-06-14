@@ -168,31 +168,34 @@ export class TrainingEngine {
     const progress = this.state.lessons[lessonId];
     if (!progress) return null;
 
+    const wasAlreadyCompleted = progress.status === 'completed';
+    const previousBestScore = progress.bestScore;
+
     progress.attempts++;
-    const bestScore = Math.max(progress.bestScore, score);
-    progress.bestScore = bestScore;
+    const isNewBestScore = score > previousBestScore;
+    if (isNewBestScore) {
+      progress.bestScore = score;
+    }
 
     const targetScore = lesson.steps.find((s) => s.targetScore)?.targetScore || 0;
     const passed = score >= targetScore || lesson.type !== 'exam';
     const stars = this.calculateStars(score, targetScore);
 
     let coinReward = 0;
-    if (progress.status !== 'completed') {
+
+    if (!wasAlreadyCompleted && passed) {
       coinReward = lesson.coinReward;
       if (stars >= 3) {
         coinReward = Math.floor(coinReward * 1.5);
       }
       this.state.totalCoinsEarned += coinReward;
-    } else if (bestScore > progress.bestScore - score) {
-      coinReward = Math.floor(lesson.coinReward * 0.2);
-      this.state.totalCoinsEarned += coinReward;
-    }
-
-    if (passed) {
       progress.status = 'completed';
       progress.completedAt = Date.now();
       this.state.lessonsCompleted++;
       this.unlockNextLesson(lessonId);
+    } else if (wasAlreadyCompleted && isNewBestScore) {
+      coinReward = Math.floor(lesson.coinReward * 0.2);
+      this.state.totalCoinsEarned += coinReward;
     }
 
     this.saveToLocalStorage();
