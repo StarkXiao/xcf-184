@@ -12,11 +12,13 @@ type TabId = 'overview' | 'tasks' | 'scenes' | 'items' | 'leaderboard' | 'exchan
 interface FestivalCenterProps {
   onClose: () => void;
   onStartScene: (sceneId: string) => void;
+  onAddCoins: (amount: number) => void;
 }
 
 export const FestivalCenter: React.FC<FestivalCenterProps> = ({
   onClose,
   onStartScene,
+  onAddCoins,
 }) => {
   const festival = useFestival();
   const [activeTab, setActiveTab] = useState<TabId>('overview');
@@ -30,6 +32,20 @@ export const FestivalCenter: React.FC<FestivalCenterProps> = ({
   const handleStartScene = (sceneId: string) => {
     festival.selectScene(sceneId);
     onStartScene(sceneId);
+  };
+
+  const handleClaimTaskReward = (taskId: string) => {
+    const result = festival.claimTaskReward(taskId);
+    if (result && result.coinValue > 0) {
+      onAddCoins(result.coinValue);
+    }
+  };
+
+  const handlePurchaseExchange = (exchangeId: string) => {
+    const result = festival.purchaseExchange(exchangeId);
+    if (result && result.coinValue > 0) {
+      onAddCoins(result.coinValue);
+    }
   };
 
   const tabs: { id: TabId; label: string; icon: string }[] = [
@@ -281,7 +297,7 @@ export const FestivalCenter: React.FC<FestivalCenterProps> = ({
               tasks={festivalTasks}
               getTaskProgress={festival.getTaskProgress}
               getTaskStatus={festival.getTaskStatus}
-              onClaimReward={festival.claimTaskReward}
+              onClaimReward={handleClaimTaskReward}
             />
           )}
 
@@ -315,7 +331,7 @@ export const FestivalCenter: React.FC<FestivalCenterProps> = ({
               exchanges={festivalExchanges}
               festivalCurrency={festival.progress.festivalCurrency}
               canPurchaseExchange={festival.canPurchaseExchange}
-              onPurchase={festival.purchaseExchange}
+              onPurchase={handlePurchaseExchange}
               getPurchaseCount={festival.getExchangePurchaseCount}
             />
           )}

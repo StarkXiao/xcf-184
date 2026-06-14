@@ -195,18 +195,21 @@ function App() {
 
     workshop.addCoins(coins);
 
-    if (savedFestivalSceneId) {
+    const festivalActive = festivalEngine.getStatus() === 'active';
+    if (festivalActive) {
       festivalEngine.recordFlight({
         score: adjustedScore,
         distance: gameOverStats.distance,
         maxHeight: gameOverStats.maxHeight,
         airCurrentCount: gameOverStats.airCurrentCount,
         collisions: gameOverStats.collisions,
-        sceneId: savedFestivalSceneId,
+        sceneId: savedFestivalSceneId || undefined,
       });
-      const festivalCurrencyEarned = Math.floor(adjustedScore * 0.02);
-      if (festivalCurrencyEarned > 0) {
-        festivalEngine.addFestivalCurrency(festivalCurrencyEarned);
+      if (savedFestivalSceneId) {
+        const festivalCurrencyEarned = Math.floor(adjustedScore * 0.02);
+        if (festivalCurrencyEarned > 0) {
+          festivalEngine.addFestivalCurrency(festivalCurrencyEarned);
+        }
       }
       festivalStateEmitter.emit();
     }
@@ -842,6 +845,9 @@ function App() {
         <FestivalCenter
           onClose={handleCloseFestival}
           onStartScene={handleStartFestivalScene}
+          onAddCoins={(amount) => {
+            workshop.addCoins(amount);
+          }}
         />
       )}
     </div>

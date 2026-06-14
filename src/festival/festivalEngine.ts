@@ -296,7 +296,10 @@ export class FestivalEngine {
     return true;
   }
 
-  public purchaseExchange(exchangeId: string): TaskReward | null {
+  public purchaseExchange(exchangeId: string): {
+    reward: TaskReward;
+    coinValue: number;
+  } | null {
     const exchange = this.getExchange(exchangeId);
     if (!exchange || !this.canPurchaseExchange(exchangeId)) return null;
 
@@ -304,11 +307,21 @@ export class FestivalEngine {
     this.state.progress.claimedExchanges.push(exchangeId);
 
     const reward = exchange.reward;
-    if (reward.type === 'item' && reward.id) {
-      this.addItem(reward.id, reward.amount);
+    const festival = this.getCurrentFestival();
+    const currencyId = festival?.currencyId ?? '';
+    let coinValue = 0;
+
+    if (reward.type === 'coin') {
+      coinValue = reward.amount;
+    } else if (reward.type === 'item' && reward.id) {
+      if (reward.id === currencyId) {
+        this.state.progress.festivalCurrency += reward.amount;
+      } else {
+        this.addItem(reward.id, reward.amount);
+      }
     }
 
-    return reward;
+    return { reward, coinValue };
   }
 
   public getFestivalCurrency(): number {
@@ -384,7 +397,7 @@ export class FestivalEngine {
         maxHeight: flightData.maxHeight,
         airCurrentCount: flightData.airCurrentCount,
         collisions: flightData.collisions,
-        sceneId: flightData.sceneId || this.state.currentSceneId,
+        sceneId: (flightData.sceneId || this.state.currentSceneId) ?? '',
       });
 
       if (progress > 0) {
@@ -431,28 +444,49 @@ export class FestivalEngine {
     }
   }
 
-  public claimTaskReward(taskId: string): TaskReward[] | null {
+  public claimTaskReward(taskId: string): {
+    rewards: TaskReward[];
+    coinValue: number;
+    festivalCurrencyValue: number;
+  } | null {
     const task = this.getTask(taskId);
     if (!task) return null;
 
     const status = this.getTaskStatus(taskId);
     if (status !== 'completed') return null;
 
+    const festival = this.getCurrentFestival();
+    const currencyId = festival?.currencyId ?? '';
+
     this.state.progress.taskStatuses[taskId] = 'claimed';
+
+    let totalCoinValue = 0;
+    let totalFestivalCurrencyValue = 0;
 
     task.rewards.forEach((reward) => {
       if (reward.type === 'coin') {
-        this.state.progress.festivalCurrency += 0;
+        totalCoinValue += reward.amount;
       } else if (reward.type === 'item' && reward.id) {
-        this.addItem(reward.id, reward.amount);
+        if (reward.id === currencyId) {
+          this.state.progress.festivalCurrency += reward.amount;
+          totalFestivalCurrencyValue += reward.amount;
+        } else {
+          this.addItem(reward.id, reward.amount);
+        }
       } else if (reward.type === 'badge' && reward.id) {
         if (!this.state.progress.badges.includes(reward.id)) {
           this.state.progress.badges.push(reward.id);
         }
+      } else if (reward.type === 'score_bonus') {
+        // 得分加成类型奖励可在此处理
       }
     });
 
-    return task.rewards;
+    return {
+      rewards: task.rewards,
+      coinValue: totalCoinValue,
+      festivalCurrencyValue: totalFestivalCurrencyValue,
+    };
   }
 
   public getRewardsCoinValue(rewards: TaskReward[]): number {

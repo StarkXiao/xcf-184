@@ -113,7 +113,11 @@ export function useFestival(autoRefresh = true) {
   }, []);
 
   const claimTaskReward = useCallback(
-    (taskId: string): TaskReward[] | null => {
+    (taskId: string): {
+      rewards: TaskReward[];
+      coinValue: number;
+      festivalCurrencyValue: number;
+    } | null => {
       const result = festivalEngine.claimTaskReward(taskId);
       if (result) {
         refreshState();
@@ -228,8 +232,15 @@ export function useFestival(autoRefresh = true) {
     return festivalEngine.canPurchaseExchange(exchangeId);
   }, []);
 
+  const getExchangePurchaseCount = useCallback((exchangeId: string): number => {
+    return festivalEngine.getExchangePurchaseCount(exchangeId);
+  }, []);
+
   const purchaseExchange = useCallback(
-    (exchangeId: string): TaskReward | null => {
+    (exchangeId: string): {
+      reward: TaskReward;
+      coinValue: number;
+    } | null => {
       const result = festivalEngine.purchaseExchange(exchangeId);
       if (result) {
         refreshState();
@@ -322,6 +333,7 @@ export function useFestival(autoRefresh = true) {
     getExchangesForFestival,
     getExchange,
     canPurchaseExchange,
+    getExchangePurchaseCount,
     purchaseExchange,
     getFestivalCurrency,
     addFestivalCurrency,
