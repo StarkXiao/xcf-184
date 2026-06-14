@@ -13,6 +13,13 @@ export interface KiteState {
   stringLength: number;
 }
 
+export interface ShadowTrailPoint {
+  x: number;
+  z: number;
+  brightness: number;
+  timestamp: number;
+}
+
 export interface AirCurrent {
   id: string;
   position: Vector3;
@@ -22,6 +29,7 @@ export interface AirCurrent {
   type: 'updraft' | 'downdraft' | 'turbulence';
   lifeTime: number;
   maxLifeTime: number;
+  shadowBrightness: number;
 }
 
 export interface Building {
@@ -47,6 +55,9 @@ export interface GameStats {
   time: number;
   maxHeight: number;
   airCurrentCount: number;
+  shadowTracking: number;
+  flightStability: number;
+  shadowBonus: number;
 }
 
 export interface WeatherConfig {
@@ -67,6 +78,8 @@ export interface GameConfig {
   minBuildingHeight: number;
   maxBuildingHeight: number;
   buildingDensity: number;
+  shadowTrailLength: number;
+  shadowTrackingTargetDistance: number;
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
@@ -79,6 +92,8 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   minBuildingHeight: 15,
   maxBuildingHeight: 60,
   buildingDensity: 0.3,
+  shadowTrailLength: 40,
+  shadowTrackingTargetDistance: 35,
 };
 
 export const DEFAULT_WEATHER: WeatherConfig = {

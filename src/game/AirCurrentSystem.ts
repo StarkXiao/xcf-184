@@ -1,31 +1,38 @@
 import * as THREE from 'three';
-import type { AirCurrent, GameConfig, Vector3 } from './types';
+import type { AirCurrent, GameConfig, Vector3, ShadowTrailPoint } from './types';
 
 export class AirCurrentSystem {
   public airCurrents: AirCurrent[] = [];
   private scene: THREE.Scene;
   private config: GameConfig;
   private visualMeshes: Map<string, THREE.Group> = new Map();
+  private shadowTrail: ShadowTrailPoint[] = [];
 
   constructor(scene: THREE.Scene, config: GameConfig) {
     this.scene = scene;
     this.config = config;
   }
 
+  public updateShadowTrail(trail: ShadowTrailPoint[]): void {
+    this.shadowTrail = trail.slice();
+  }
+
   public spawnAirCurrent(
     position: Vector3,
     type: 'updraft' | 'downdraft' | 'turbulence',
-    strength?: number
+    strength?: number,
+    shadowBrightness: number = 0.5
   ): void {
     const id = `air-${Date.now()}-${Math.random()}`;
+    const brightnessMultiplier = 0.5 + shadowBrightness * 1.0;
     const currentStrength =
-      strength ??
-      this.config.minAirCurrentStrength +
-        Math.random() *
-          (this.config.maxAirCurrentStrength -
-            this.config.minAirCurrentStrength);
+      (strength ??
+        this.config.minAirCurrentStrength +
+          Math.random() *
+            (this.config.maxAirCurrentStrength -
+              this.config.minAirCurrentStrength)) * brightnessMultiplier;
 
-    const radius = 15 + Math.random() * 25;
+    const radius = (15 + Math.random() * 25) * (0.8 + shadowBrightness * 0.6);
 
     let direction: Vector3;
     switch (type) {
@@ -53,6 +60,7 @@ export class AirCurrentSystem {
       type,
       lifeTime: 0,
       maxLifeTime: 8 + Math.random() * 12,
+      shadowBrightness,
     };
 
     this.airCurrents.push(airCurrent);
@@ -62,16 +70,19 @@ export class AirCurrentSystem {
   private createVisual(airCurrent: AirCurrent): void {
     const group = new THREE.Group();
 
-    const particleCount = 40;
+    const particleCount = Math.floor(40 * (0.7 + airCurrent.shadowBrightness * 0.8));
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 
-    const color =
+    const baseColor =
       airCurrent.type === 'updraft'
         ? [0.4, 0.8, 1.0]
         : airCurrent.type === 'downdraft'
           ? [1.0, 0.5, 0.3]
           : [0.8, 0.6, 1.0];
+
+    const brightnessBoost = 0.6 + airCurrent.shadowBrightness * 0.4;
+    const color = baseColor.map((c) => Math.min(1, c * brightnessBoost)) as [number, number, number];
 
     for (let i = 0; i < particleCount; i++) {
       const theta = Math.random() * Math.PI * 2;
@@ -82,9 +93,10 @@ export class AirCurrentSystem {
       positions[i * 3 + 1] = airCurrent.position.y + r * Math.cos(phi);
       positions[i * 3 + 2] = airCurrent.position.z + r * Math.sin(phi) * Math.sin(theta);
 
-      colors[i * 3] = color[0];
-      colors[i * 3 + 1] = color[1];
-      colors[i * 3 + 2] = color[2];
+      const jitter = 0.85 + Math.random() * 0.3;
+      colors[i * 3] = color[0] * jitter;
+      colors[i * 3 + 1] = color[1] * jitter;
+      colors[i * 3 + 2] = color[2] * jitter;
     }
 
     const geometry = new THREE.BufferGeometry();
@@ -95,10 +107,10 @@ export class AirCurrentSystem {
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const material = new THREE.PointsMaterial({
-      size: 0.8,
+      size: 0.8 + airCurrent.shadowBrightness * 0.5,
       vertexColors: true,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.4 + airCurrent.shadowBrightness * 0.3,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -106,16 +118,29 @@ export class AirCurrentSystem {
     const particles = new THREE.Points(geometry, material);
     group.add(particles);
 
-    const ringGeometry = new THREE.TorusGeometry(airCurrent.radius, 0.3, 8, 64);
+    const ringGeometry = new THREE.TorusGeometry(airCurrent.radius, 0.3 + airCurrent.shadowBrightness * 0.3, 8, 64);
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: new THREE.Color(color[0], color[1], color[2]),
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.2 + airCurrent.shadowBrightness * 0.3,
       side: THREE.DoubleSide,
     });
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
     ring.rotation.x = Math.PI / 2;
     group.add(ring);
+
+    if (airCurrent.shadowBrightness > 0.7) {
+      const innerRingGeometry = new THREE.TorusGeometry(airCurrent.radius * 0.6, 0.15, 8, 48);
+      const innerRingMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.25 * (airCurrent.shadowBrightness - 0.7) / 0.3,
+        side: THREE.DoubleSide,
+      });
+      const innerRing = new THREE.Mesh(innerRingGeometry, innerRingMaterial);
+      innerRing.rotation.x = Math.PI / 2;
+      group.add(innerRing);
+    }
 
     group.position.set(
       airCurrent.position.x,
@@ -130,14 +155,55 @@ export class AirCurrentSystem {
   public update(
     delta: number,
     kitePosition: THREE.Vector3,
-    turbulenceLevel: number
+    turbulenceLevel: number,
+    recommendedPosition: Vector3 | null,
+    shadowBrightness: number
   ): Vector3 {
     let totalForce: Vector3 = { x: 0, y: 0, z: 0 };
 
-    if (Math.random() < this.config.airCurrentSpawnRate) {
-      const spawnX = kitePosition.x + (Math.random() - 0.5) * 200;
-      const spawnY = 30 + Math.random() * 120;
-      const spawnZ = kitePosition.z - 50 - Math.random() * 150;
+    const spawnRate = this.config.airCurrentSpawnRate * (0.8 + shadowBrightness * 0.8);
+
+    if (Math.random() < spawnRate) {
+      let spawnPosition: Vector3;
+      let effectiveBrightness = shadowBrightness;
+
+      if (recommendedPosition && Math.random() < 0.75) {
+        spawnPosition = {
+          x: recommendedPosition.x + (Math.random() - 0.5) * 40,
+          y: recommendedPosition.y + (Math.random() - 0.5) * 30,
+          z: recommendedPosition.z + (Math.random() - 0.5) * 40,
+        };
+
+        if (this.shadowTrail.length > 0) {
+          let maxBrightness = 0;
+          for (const point of this.shadowTrail) {
+            const dist = Math.sqrt(
+              (spawnPosition.x - point.x) ** 2 + (spawnPosition.z - point.z) ** 2
+            );
+            if (dist < 40) {
+              maxBrightness = Math.max(maxBrightness, point.brightness);
+            }
+          }
+          if (maxBrightness > 0) {
+            effectiveBrightness = maxBrightness;
+          }
+        }
+      } else if (this.shadowTrail.length > 5 && Math.random() < 0.5) {
+        const trailIndex = Math.floor(Math.random() * Math.min(15, this.shadowTrail.length - 1));
+        const trailPoint = this.shadowTrail[trailIndex];
+        spawnPosition = {
+          x: trailPoint.x + (Math.random() - 0.5) * 50,
+          y: 30 + Math.random() * 100,
+          z: trailPoint.z + (Math.random() - 0.5) * 50,
+        };
+        effectiveBrightness = trailPoint.brightness;
+      } else {
+        spawnPosition = {
+          x: kitePosition.x + (Math.random() - 0.5) * 200,
+          y: 30 + Math.random() * 120,
+          z: kitePosition.z - 50 - Math.random() * 150,
+        };
+      }
 
       const types: Array<'updraft' | 'downdraft' | 'turbulence'> = [
         'updraft',
@@ -145,12 +211,18 @@ export class AirCurrentSystem {
         'turbulence',
         'downdraft',
       ];
-      const type = types[Math.floor(Math.random() * types.length)];
+      const brightTypes: Array<'updraft' | 'downdraft' | 'turbulence'> = [
+        'updraft',
+        'updraft',
+        'updraft',
+        'turbulence',
+      ];
+      const useBright = effectiveBrightness > 0.6;
+      const type = (useBright ? brightTypes : types)[
+        Math.floor(Math.random() * (useBright ? brightTypes.length : types.length)
+      ];
 
-      this.spawnAirCurrent(
-        { x: spawnX, y: spawnY, z: spawnZ },
-        type
-      );
+      this.spawnAirCurrent(spawnPosition, type, undefined, effectiveBrightness);
     }
 
     for (let i = this.airCurrents.length - 1; i >= 0; i--) {

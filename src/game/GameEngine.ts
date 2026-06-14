@@ -5,6 +5,7 @@ import { FlightController } from './FlightController';
 import { AirCurrentSystem } from './AirCurrentSystem';
 import { CollisionSystem } from './CollisionSystem';
 import { WeatherSystem } from './WeatherSystem';
+import { ShadowTrackingSystem } from './ShadowTrackingSystem';
 import type {
   GameConfig,
   GameStats,
@@ -34,6 +35,7 @@ export class GameEngine {
   private airCurrentSystem!: AirCurrentSystem;
   private collisionSystem!: CollisionSystem;
   private weatherSystem!: WeatherSystem;
+  private shadowTrackingSystem!: ShadowTrackingSystem;
 
   private animationId: number | null = null;
   private lastTime: number = 0;
@@ -41,6 +43,8 @@ export class GameEngine {
   private startPosition: THREE.Vector3 = new THREE.Vector3();
   private previousKitePosition: THREE.Vector3 = new THREE.Vector3();
   private collisions = 0;
+  private shadowTrackingAccumulator = 0;
+  private shadowTrackingSamples = 0;
 
   constructor(
     container: HTMLElement,
@@ -58,6 +62,9 @@ export class GameEngine {
       time: 0,
       maxHeight: 80,
       airCurrentCount: 0,
+      shadowTracking: 0.5,
+      flightStability: 1,
+      shadowBonus: 0,
     };
   }
 
@@ -73,6 +80,10 @@ export class GameEngine {
     this.weatherSystem = new WeatherSystem(
       this.sceneManager.scene,
       this.config.worldSize
+    );
+    this.shadowTrackingSystem = new ShadowTrackingSystem(
+      this.sceneManager.scene,
+      this.config
     );
 
     this.sceneManager.scene.add(this.kite.group);
@@ -117,6 +128,12 @@ export class GameEngine {
   public restart(): void {
     this.kite.reset();
     this.airCurrentSystem.clear();
+    this.shadowTrackingSystem.clear();
+
+    this.shadowTrackingSystem = new ShadowTrackingSystem(
+      this.sceneManager.scene,
+      this.config
+    );
 
     this.stats = {
       score: 0,
@@ -125,11 +142,16 @@ export class GameEngine {
       time: 0,
       maxHeight: 80,
       airCurrentCount: 0,
+      shadowTracking: 0.5,
+      flightStability: 1,
+      shadowBonus: 0,
     };
 
     this.startPosition.copy(this.kite.group.position);
     this.previousKitePosition.copy(this.kite.group.position);
     this.collisions = 0;
+    this.shadowTrackingAccumulator = 0;
+    this.shadowTrackingSamples = 0;
     this.startTime = performance.now();
     this.lastTime = performance.now();
 
@@ -160,19 +182,50 @@ export class GameEngine {
 
     this.flightController.update();
 
-    this.kite.updatePhysics(this.flightController.input, this.config.gravity, delta);
-
+    const timeProgress = (this.stats.time % 120) / 120;
     this.weatherSystem.update(delta);
+    this.weatherSystem.setTimeOfDay(timeProgress);
+    this.sceneManager.setSkyColor(timeProgress);
+    this.sceneManager.setSunPosition(timeProgress);
+
+    this.shadowTrackingSystem.update(
+      delta,
+      this.kite.group.position,
+      this.kite.velocity,
+      timeProgress
+    );
+
+    this.stats.shadowTracking = this.shadowTrackingSystem.getTrackingScore();
+    this.stats.flightStability = this.shadowTrackingSystem.getFlightStability();
+
+    this.shadowTrackingAccumulator += this.stats.shadowTracking;
+    this.shadowTrackingSamples++;
+
+    this.airCurrentSystem.updateShadowTrail(this.shadowTrackingSystem.shadowTrail);
+
+    this.kite.updatePhysics(
+      this.flightController.input,
+      this.config.gravity,
+      delta,
+      this.stats.flightStability,
+      this.stats.shadowTracking
+    );
+
     const windForce = this.weatherSystem.getWindForce();
-    this.kite.applyAirCurrent(windForce);
+    this.kite.applyAirCurrent(windForce, this.stats.shadowTracking, this.stats.flightStability);
+
+    const recommendedPosition = this.shadowTrackingSystem.getRecommendedAirCurrentPosition();
+    const shadowBrightness = this.shadowTrackingSystem.getShadowBrightness();
 
     const airForce = this.airCurrentSystem.update(
       delta,
       this.kite.getPosition(),
-      this.weatherSystem.config.turbulenceLevel
+      this.weatherSystem.config.turbulenceLevel,
+      recommendedPosition,
+      shadowBrightness
     );
     if (Math.abs(airForce.x) + Math.abs(airForce.y) + Math.abs(airForce.z) > 0.01) {
-      this.kite.applyAirCurrent(airForce);
+      this.kite.applyAirCurrent(airForce, this.stats.shadowTracking, this.stats.flightStability);
       this.stats.airCurrentCount++;
     }
 
@@ -202,18 +255,25 @@ export class GameEngine {
     this.stats.distance += travelDistance;
     this.previousKitePosition.copy(this.kite.group.position);
 
+    const avgTracking = this.shadowTrackingSamples > 0
+      ? this.shadowTrackingAccumulator / this.shadowTrackingSamples
+      : 0;
+
+    const shadowBonusScore = Math.floor(
+      this.stats.distance * 0.15 * avgTracking +
+        this.stats.airCurrentCount * 3 * avgTracking
+    );
+    this.stats.shadowBonus = shadowBonusScore;
+
     this.stats.score = Math.floor(
       this.stats.distance * 0.1 +
         this.stats.maxHeight * 2 +
-        this.stats.airCurrentCount * 5 -
+        this.stats.airCurrentCount * 5 +
+        shadowBonusScore +
+        this.stats.flightStability * 50 -
         this.collisions * 10
     );
     this.stats.score = Math.max(0, this.stats.score);
-
-    const timeProgress = (this.stats.time % 120) / 120;
-    this.weatherSystem.setTimeOfDay(timeProgress);
-    this.sceneManager.setSkyColor(timeProgress);
-    this.sceneManager.setSunPosition(timeProgress);
 
     this.sceneManager.updateCamera(this.kite.group.position);
     this.callbacks.onStatsUpdate(this.stats);
@@ -237,6 +297,7 @@ export class GameEngine {
 
     this.airCurrentSystem.clear();
     this.weatherSystem.clear();
+    this.shadowTrackingSystem.clear();
     this.flightController.dispose();
     this.sceneManager.dispose();
   }

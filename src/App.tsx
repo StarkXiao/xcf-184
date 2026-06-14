@@ -15,6 +15,9 @@ const DEFAULT_STATS: GameStats = {
   time: 0,
   maxHeight: 80,
   airCurrentCount: 0,
+  shadowTracking: 0.5,
+  flightStability: 1,
+  shadowBonus: 0,
 };
 
 function App() {

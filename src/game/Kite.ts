@@ -159,19 +159,26 @@ export class Kite {
   public updatePhysics(
     input: { x: number; y: number; z: number },
     gravity: number,
-    delta: number
+    delta: number,
+    flightStability: number = 1,
+    trackingScore: number = 0.5
   ): void {
+    const stabilityFactor = 0.7 + flightStability * 0.5;
+    const trackingBoost = 1 + trackingScore * 0.3;
+
     const acceleration = new THREE.Vector3(
-      input.x * this.config.kiteSpeed,
-      input.y * this.config.kiteSpeed * 0.8,
-      input.z * this.config.kiteSpeed
+      input.x * this.config.kiteSpeed * stabilityFactor * trackingBoost,
+      input.y * this.config.kiteSpeed * 0.8 * stabilityFactor,
+      input.z * this.config.kiteSpeed * stabilityFactor * trackingBoost
     );
 
     this.velocity.add(acceleration.multiplyScalar(delta));
-    this.velocity.y -= gravity;
-    this.velocity.multiplyScalar(0.98);
+    this.velocity.y -= gravity * (1 - trackingScore * 0.2);
 
-    const maxSpeed = 1.5;
+    const dragFactor = 0.98 - flightStability * 0.015;
+    this.velocity.multiplyScalar(dragFactor);
+
+    const maxSpeed = 1.2 + flightStability * 0.6 + trackingScore * 0.3;
     if (this.velocity.length() > maxSpeed) {
       this.velocity.setLength(maxSpeed);
     }
@@ -233,11 +240,12 @@ export class Kite {
     );
 
     const heightFactor = Math.min(1, this.group.position.y / 200);
-    this.shadowMesh.scale.setScalar(1 + heightFactor * 1.5);
+    const scale = 1 + heightFactor * 1.5;
+    this.shadowMesh.scale.set(scale * 1.5, scale * 1.2, scale);
 
     const shadowMaterial = this.shadowMesh
       .material as THREE.ShadowMaterial;
-    shadowMaterial.opacity = 0.4 * (1 - heightFactor * 0.5);
+    shadowMaterial.opacity = 0.55 * (1 - heightFactor * 0.4);
   }
 
   private updateString(): void {
@@ -289,10 +297,14 @@ export class Kite {
     this.trailParticles.geometry.attributes.position.needsUpdate = true;
   }
 
-  public applyAirCurrent(force: Vector3): void {
-    this.velocity.x += force.x;
-    this.velocity.y += force.y;
-    this.velocity.z += force.z;
+  public applyAirCurrent(force: Vector3, trackingScore: number = 0.5, flightStability: number = 1): void {
+    const trackingMultiplier = 0.7 + trackingScore * 0.8;
+    const stabilityMultiplier = 0.8 + flightStability * 0.4;
+    const multiplier = trackingMultiplier * stabilityMultiplier;
+
+    this.velocity.x += force.x * multiplier;
+    this.velocity.y += force.y * multiplier;
+    this.velocity.z += force.z * multiplier;
   }
 
   public getPosition(): THREE.Vector3 {

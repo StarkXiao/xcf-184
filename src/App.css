@@ -336,10 +336,42 @@
 .score-card {
   background: linear-gradient(135deg, rgba(255, 107, 107, 0.8), rgba(238, 90, 90, 0.8));
   border: none;
+  position: relative;
+}
+
+.stat-bonus {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: linear-gradient(135deg, #ffd700, #ff8c00);
+  color: #1a1a2e;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  animation: bounce 1s ease infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
 }
 
 .time-card {
   background: rgba(30, 30, 40, 0.8);
+}
+
+.tracking-mini-card {
+  background: linear-gradient(135deg, rgba(30, 30, 40, 0.9), rgba(50, 40, 20, 0.9));
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  text-align: center;
+}
+
+.tracking-grade {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  font-family: 'Segoe UI', sans-serif;
 }
 
 .stat-label {
