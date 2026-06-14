@@ -367,6 +367,27 @@ export class WeatherLabEngine {
     return scene.gameConfig || null;
   }
 
+  public getWeatherConfigOverride(scene: WeatherScene): Partial<WeatherConfig> {
+    return {
+      windSpeed: scene.weatherConfig.windSpeed,
+      windDirection: { ...scene.weatherConfig.windDirection },
+      cloudCoverage: scene.weatherConfig.cloudCoverage,
+      timeOfDay: scene.weatherConfig.timeOfDay,
+      turbulenceLevel: scene.weatherConfig.turbulenceLevel,
+      timeOfDayFrozen: scene.weatherConfig.timeOfDayFrozen ?? false,
+      windField: {
+        windSpeed: scene.windField.windSpeed,
+        windDirection: { ...scene.windField.windDirection },
+        turbulenceLevel: scene.windField.turbulenceLevel,
+        gustStrength: scene.windField.gustStrength,
+        gustFrequency: scene.windField.gustFrequency,
+        shearFactor: scene.windField.shearFactor,
+        boundaryLayerHeight: scene.windField.boundaryLayerHeight,
+        windDirectionLocked: scene.windField.windDirectionLocked ?? true,
+      },
+    };
+  }
+
   public generateWindFieldPreview(windField: WindFieldConfig, height: number): Vector3 {
     const heightFactor = Math.min(1, height / windField.boundaryLayerHeight);
     const shearEffect = windField.shearFactor * heightFactor;

@@ -1,22 +1,14 @@
-import type { WeatherConfig, GameConfig, GameStats, Vector3 } from '../game/types';
+import type { WeatherConfig, GameConfig, GameStats, Vector3, WindFieldConfig } from '../game/types';
+import { DEFAULT_WIND_FIELD as GameDefaultWindField } from '../game/types';
 
-export type { WeatherConfig, GameConfig, GameStats, Vector3 };
+export type { WeatherConfig, GameConfig, GameStats, Vector3, WindFieldConfig };
+export { GameDefaultWindField as DEFAULT_WIND_FIELD };
 
 export type WeatherLabTab = 'windConfig' | 'scenes' | 'comparison' | 'anomaly';
 
 export type SceneCategory = 'preset' | 'saved' | 'favorite';
 
 export type AnomalyType = 'crash' | 'instability' | 'turbulence' | 'unexpected_drop' | 'control_loss';
-
-export interface WindFieldConfig {
-  windSpeed: number;
-  windDirection: Vector3;
-  turbulenceLevel: number;
-  gustStrength: number;
-  gustFrequency: number;
-  shearFactor: number;
-  boundaryLayerHeight: number;
-}
 
 export interface WeatherScene {
   id: string;
@@ -107,16 +99,6 @@ export interface SceneStats {
   successRate: number;
   anomalyCount: number;
 }
-
-export const DEFAULT_WIND_FIELD: WindFieldConfig = {
-  windSpeed: 0.3,
-  windDirection: { x: 1, y: 0, z: 0.3 },
-  turbulenceLevel: 0.2,
-  gustStrength: 0.1,
-  gustFrequency: 0.05,
-  shearFactor: 0.02,
-  boundaryLayerHeight: 50,
-};
 
 export const WEATHER_ICONS: Record<string, string> = {
   sunny: '☀️',

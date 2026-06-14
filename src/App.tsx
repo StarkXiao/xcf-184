@@ -413,6 +413,7 @@ function App() {
 
   const handleStartWeatherLabScene = (scene: WeatherScene) => {
     const configOverride = weatherLabEngine.getGameConfigOverride(scene);
+    const weatherConfigOverride = weatherLabEngine.getWeatherConfigOverride(scene);
     setWeatherLabSceneId(scene.id);
     weatherLabSceneIdRef.current = scene.id;
     setShowWeatherLab(false);
@@ -420,28 +421,24 @@ function App() {
     flightDataPointsRef.current = [];
     flightDataLastSaveTimeRef.current = 0;
 
-    if (gameEngineRef.current && configOverride) {
-      gameEngineRef.current.reconfigure({
-        worldSize: configOverride.worldSize,
-        gravity: configOverride.gravity,
-        airCurrentSpawnRate: configOverride.airCurrentSpawnRate,
-        minAirCurrentStrength: configOverride.minAirCurrentStrength,
-        maxAirCurrentStrength: configOverride.maxAirCurrentStrength,
-        minBuildingHeight: configOverride.minBuildingHeight,
-        maxBuildingHeight: configOverride.maxBuildingHeight,
-        buildingDensity: configOverride.buildingDensity,
-        cloudCoverage: configOverride.cloudCoverage,
-        turbulenceLevel: configOverride.turbulenceLevel,
-      });
+    if (gameEngineRef.current) {
+      if (configOverride) {
+        gameEngineRef.current.reconfigure({
+          ...configOverride,
+          weatherConfig: weatherConfigOverride,
+        });
+      } else {
+        gameEngineRef.current.setWeatherConfig(weatherConfigOverride);
+      }
 
+      const gravity = configOverride?.gravity ?? 0.015;
+      const turbulence = configOverride?.turbulenceLevel ?? scene.weatherConfig.turbulenceLevel;
       gameEngineRef.current.setFlightParams({
         ...workshop.flightParams,
-        maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + (configOverride.gravity ?? 0.015))),
-        stabilityFactor: workshop.flightParams.stabilityFactor * (1 - (configOverride.turbulenceLevel ?? 0.2) * 0.3),
+        maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + gravity)),
+        stabilityFactor: workshop.flightParams.stabilityFactor * (1 - turbulence * 0.3),
       });
 
-      gameEngineRef.current.restart();
-    } else if (gameEngineRef.current) {
       gameEngineRef.current.restart();
     }
   };

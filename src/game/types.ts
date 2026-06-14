@@ -61,12 +61,25 @@ export interface GameStats {
   collisions: number;
 }
 
+export interface WindFieldConfig {
+  windSpeed: number;
+  windDirection: Vector3;
+  turbulenceLevel: number;
+  gustStrength: number;
+  gustFrequency: number;
+  shearFactor: number;
+  boundaryLayerHeight: number;
+  windDirectionLocked: boolean;
+}
+
 export interface WeatherConfig {
   windSpeed: number;
   windDirection: Vector3;
   cloudCoverage: number;
   timeOfDay: number;
   turbulenceLevel: number;
+  timeOfDayFrozen: boolean;
+  windField?: WindFieldConfig;
 }
 
 export interface FlightParams {
@@ -115,10 +128,23 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   cloudCoverage: 0.5,
 };
 
+export const DEFAULT_WIND_FIELD: WindFieldConfig = {
+  windSpeed: 0.3,
+  windDirection: { x: 1, y: 0, z: 0.3 },
+  turbulenceLevel: 0.2,
+  gustStrength: 0.1,
+  gustFrequency: 0.05,
+  shearFactor: 0.02,
+  boundaryLayerHeight: 50,
+  windDirectionLocked: false,
+};
+
 export const DEFAULT_WEATHER: WeatherConfig = {
   windSpeed: 0.3,
   windDirection: { x: 1, y: 0, z: 0.3 },
   cloudCoverage: 0.5,
   timeOfDay: 0.5,
   turbulenceLevel: 0.2,
+  timeOfDayFrozen: false,
+  windField: { ...DEFAULT_WIND_FIELD },
 };

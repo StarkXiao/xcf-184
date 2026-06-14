@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { WindFieldConfig, WeatherScene, WeatherConfig } from '../types';
-import { DEFAULT_WIND_FIELD, DIFFICULTY_NAMES, DIFFICULTY_COLORS } from '../types';
+import { DIFFICULTY_NAMES, DIFFICULTY_COLORS } from '../types';
 import type { GameConfig } from '../../game/types';
-import { DEFAULT_WEATHER } from '../../game/types';
+import { DEFAULT_WEATHER, DEFAULT_WIND_FIELD } from '../../game/types';
 
 interface WindConfigPanelProps {
   currentScene: WeatherScene | null;

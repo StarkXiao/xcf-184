@@ -81,7 +81,15 @@ export class GameEngine {
     this.collisionSystem = new CollisionSystem(this.sceneManager.buildings);
     this.weatherSystem = new WeatherSystem(
       this.sceneManager.scene,
-      this.config.worldSize
+      this.config.worldSize,
+      {
+        windSpeed: this.config.windSpeed,
+        windDirection: { x: 1, y: 0, z: 0.3 },
+        cloudCoverage: this.config.cloudCoverage,
+        timeOfDay: 0.5,
+        turbulenceLevel: this.config.turbulenceLevel,
+        timeOfDayFrozen: false,
+      }
     );
     this.shadowTrackingSystem = new ShadowTrackingSystem(
       this.sceneManager.scene,
@@ -185,9 +193,15 @@ export class GameEngine {
 
     this.flightController.update();
 
-    const timeProgress = (this.stats.time % 120) / 120;
     this.weatherSystem.update(delta);
-    this.weatherSystem.setTimeOfDay(timeProgress);
+
+    const timeProgress = !this.weatherSystem.config.timeOfDayFrozen
+      ? (this.stats.time % 120) / 120
+      : this.weatherSystem.config.timeOfDay;
+
+    if (!this.weatherSystem.config.timeOfDayFrozen) {
+      this.weatherSystem.setTimeOfDay(timeProgress);
+    }
     this.sceneManager.setSkyColor(timeProgress);
     this.sceneManager.setSunPosition(timeProgress);
 
@@ -214,7 +228,8 @@ export class GameEngine {
       this.stats.shadowTracking
     );
 
-    const windForce = this.weatherSystem.getWindForce();
+    const kiteAltitude = this.kite.group.position.y;
+    const windForce = this.weatherSystem.getWindForce(kiteAltitude);
     this.kite.applyAirCurrent(windForce, this.stats.shadowTracking, this.stats.flightStability);
 
     const recommendedPosition = this.shadowTrackingSystem.getRecommendedAirCurrentPosition();
@@ -308,16 +323,19 @@ export class GameEngine {
     return this.kite?.getFlightParams();
   }
 
-  public reconfigure(config: Partial<GameConfig>): void {
+  public reconfigure(config: Partial<GameConfig> & { weatherConfig?: Partial<import('./types').WeatherConfig> }): void {
     this.config = { ...this.config, ...config };
 
     this.sceneManager.reconfigure(this.config);
     this.airCurrentSystem.reconfigure(config);
-    this.weatherSystem.reconfigure(this.config.worldSize, {
+
+    const weatherConfig: Partial<import('./types').WeatherConfig> = {
       windSpeed: this.config.windSpeed,
       cloudCoverage: this.config.cloudCoverage,
       turbulenceLevel: this.config.turbulenceLevel,
-    });
+      ...config.weatherConfig,
+    };
+    this.weatherSystem.reconfigure(this.config.worldSize, weatherConfig);
 
     this.collisionSystem = new CollisionSystem(this.sceneManager.buildings);
     this.shadowTrackingSystem.clear();
@@ -342,7 +360,8 @@ export class GameEngine {
   public getCurrentFlightDataPoint() {
     if (!this.kite) return null;
 
-    const windForce = this.weatherSystem.getWindForce();
+    const kiteAltitude = this.kite.group.position.y;
+    const windForce = this.weatherSystem.getWindForce(kiteAltitude);
     const position = this.kite.getPosition();
 
     return {
@@ -372,24 +391,26 @@ export class GameEngine {
         y: 0,
         z: 0,
       },
+      windSpeed: this.weatherSystem.getCurrentWindSpeed(kiteAltitude),
+      altitude: kiteAltitude,
       stability: this.stats.flightStability,
       shadowTracking: this.stats.shadowTracking,
     };
   }
 
   public getWeatherConfig() {
-    return this.weatherSystem.config;
+    return { ...this.weatherSystem.config };
   }
 
   public getWindField() {
-    return {
-      windSpeed: this.weatherSystem.config.windSpeed,
-      windDirection: { ...this.weatherSystem.config.windDirection },
-      turbulenceLevel: this.weatherSystem.config.turbulenceLevel,
-      gustStrength: 0.1,
-      gustFrequency: 0.05,
-      shearFactor: 0.02,
-      boundaryLayerHeight: 50,
-    };
+    return this.weatherSystem.getWindFieldConfig();
+  }
+
+  public setWindField(config: Partial<import('./types').WindFieldConfig>): void {
+    this.weatherSystem.setWindField(config);
+  }
+
+  public setWeatherConfig(config: Partial<import('./types').WeatherConfig>): void {
+    this.weatherSystem.reconfigure(this.config.worldSize, config);
   }
 }

@@ -1,6 +1,5 @@
 import type { WeatherScene } from './types';
-import { DEFAULT_WIND_FIELD } from './types';
-import { DEFAULT_WEATHER, DEFAULT_GAME_CONFIG } from '../game/types';
+import { DEFAULT_WIND_FIELD, DEFAULT_WEATHER, DEFAULT_GAME_CONFIG } from '../game/types';
 
 export const PRESET_SCENES: WeatherScene[] = [
   {
