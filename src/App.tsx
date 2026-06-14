@@ -11,9 +11,13 @@ import { useWorkshop } from './workshop/useWorkshop';
 import { TournamentCenter } from './tournament';
 import { tournamentEngine } from './tournament/tournamentEngine';
 import { tournamentStateEmitter } from './tournament/useTournament';
+import { TrainingCenter } from './training';
+import { trainingEngine } from './training/trainingEngine';
+import { trainingStateEmitter } from './training/useTraining';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
+import './training/training.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -37,21 +41,29 @@ function App() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [showWorkshop, setShowWorkshop] = useState(false);
   const [showTournament, setShowTournament] = useState(false);
+  const [showTraining, setShowTraining] = useState(false);
   const [adjustedFinalStats, setAdjustedFinalStats] = useState<GameStats>(DEFAULT_STATS);
   const [earnedCoins, setEarnedCoins] = useState(0);
   const [tournamentTrackId, setTournamentTrackId] = useState<string | null>(null);
   const [tournamentResult, setTournamentResult] = useState<{ trackId: string; score: number } | null>(null);
+  const [trainingLessonId, setTrainingLessonId] = useState<string | null>(null);
+  const [trainingResult, setTrainingResult] = useState<{ lessonId: string; score: number } | null>(null);
   const [, setForceUpdate] = useState(0);
 
   const workshop = useWorkshop();
 
   const tournamentTrackIdRef = useRef<string | null>(null);
+  const trainingLessonIdRef = useRef<string | null>(null);
   const gameStateRef = useRef<GameState>('menu');
   const lastScoreUpdateRef = useRef(0);
 
   useEffect(() => {
     tournamentTrackIdRef.current = tournamentTrackId;
   }, [tournamentTrackId]);
+
+  useEffect(() => {
+    trainingLessonIdRef.current = trainingLessonId;
+  }, [trainingLessonId]);
 
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -112,6 +124,18 @@ function App() {
       tournamentTrackIdRef.current = null;
       setTournamentTrackId(null);
       tournamentStateEmitter.emit();
+    }
+
+    const currentLessonId = trainingLessonIdRef.current;
+    if (currentLessonId) {
+      const result = trainingEngine.completeLesson(adjustedScore);
+      if (result) {
+        setTrainingResult({ lessonId: currentLessonId, score: result.score });
+        workshop.addCoins(result.coinReward);
+      }
+      trainingLessonIdRef.current = null;
+      setTrainingLessonId(null);
+      trainingStateEmitter.emit();
     }
 
     setGameState('gameover');
@@ -186,6 +210,13 @@ function App() {
         tournamentStateEmitter.emit();
       }
     }
+    const currentLessonId = trainingLessonIdRef.current;
+    if (currentLessonId) {
+      const success = trainingEngine.startLesson(currentLessonId);
+      if (success) {
+        trainingStateEmitter.emit();
+      }
+    }
     lastScoreUpdateRef.current = 0;
     gameEngineRef.current?.restart();
   };
@@ -195,6 +226,10 @@ function App() {
     if (tournamentTrackIdRef.current) {
       tournamentTrackIdRef.current = null;
       setTournamentTrackId(null);
+    }
+    if (trainingLessonIdRef.current) {
+      trainingLessonIdRef.current = null;
+      setTrainingLessonId(null);
     }
     setGameState('menu');
   };
@@ -218,6 +253,51 @@ function App() {
 
   const handleCloseTournament = () => {
     setShowTournament(false);
+  };
+
+  const handleOpenTraining = () => {
+    setShowTraining(true);
+  };
+
+  const handleCloseTraining = () => {
+    setShowTraining(false);
+  };
+
+  const handleStartTrainingLesson = (lessonId: string) => {
+    const configOverride = trainingEngine.getGameConfigOverride(lessonId);
+    const success = trainingEngine.startLesson(lessonId);
+    if (!success) return;
+
+    setTrainingLessonId(lessonId);
+    trainingLessonIdRef.current = lessonId;
+    setShowTraining(false);
+    lastScoreUpdateRef.current = 0;
+    trainingStateEmitter.emit();
+
+    if (gameEngineRef.current && configOverride) {
+      gameEngineRef.current.reconfigure({
+        worldSize: configOverride.worldSize,
+        gravity: configOverride.gravity,
+        airCurrentSpawnRate: configOverride.airCurrentSpawnRate,
+        minAirCurrentStrength: configOverride.minAirCurrentStrength,
+        maxAirCurrentStrength: configOverride.maxAirCurrentStrength,
+        minBuildingHeight: configOverride.minBuildingHeight,
+        maxBuildingHeight: configOverride.maxBuildingHeight,
+        buildingDensity: configOverride.buildingDensity,
+        cloudCoverage: configOverride.cloudCoverage,
+        turbulenceLevel: configOverride.turbulenceLevel,
+      });
+
+      gameEngineRef.current.setFlightParams({
+        ...workshop.flightParams,
+        maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + configOverride.gravity)),
+        stabilityFactor: workshop.flightParams.stabilityFactor * (1 - configOverride.turbulenceLevel * 0.3),
+      });
+
+      gameEngineRef.current.restart();
+    } else if (gameEngineRef.current) {
+      gameEngineRef.current.restart();
+    }
   };
 
   const handleStartTournamentTrack = (trackId: string) => {
@@ -264,7 +344,12 @@ function App() {
       />
 
       {gameState === 'menu' && (
-        <MainMenu onStart={handleStart} onWorkshop={handleOpenWorkshop} onTournament={handleOpenTournament} />
+        <MainMenu
+          onStart={handleStart}
+          onWorkshop={handleOpenWorkshop}
+          onTournament={handleOpenTournament}
+          onTraining={handleOpenTraining}
+        />
       )}
 
       {gameState === 'playing' && (
@@ -306,6 +391,18 @@ function App() {
           onClearResult={() => {
             setTournamentResult(null);
             tournamentStateEmitter.emit();
+          }}
+        />
+      )}
+
+      {showTraining && (
+        <TrainingCenter
+          onClose={handleCloseTraining}
+          onStartLesson={handleStartTrainingLesson}
+          lastResult={trainingResult}
+          onClearResult={() => {
+            setTrainingResult(null);
+            trainingStateEmitter.emit();
           }}
         />
       )}

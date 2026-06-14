@@ -1,16 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
 import { trainingEngine } from './trainingEngine';
 import type {
-  ChapterConfig,
-  ChapterProgress,
-  ExamResult,
-  GameConfigOverride,
+  TrainingState,
   LessonConfig,
   LessonProgress,
-  PendingReward,
-  TrainingEntry,
-  TrainingState,
-  TutorialStep,
+  TrainingResult,
+  GameConfigOverride,
+  LessonStep,
 } from './types';
 
 type Listener = () => void;
@@ -46,8 +42,33 @@ export function useTraining(autoRefresh = true) {
     return unsubscribe;
   }, [autoRefresh, refreshState]);
 
-  const enroll = useCallback((playerName: string): boolean => {
-    const success = trainingEngine.enroll(playerName);
+  const startLesson = useCallback((lessonId: string): boolean => {
+    const success = trainingEngine.startLesson(lessonId);
+    if (success) {
+      trainingStateEmitter.emit();
+      refreshState();
+    }
+    return success;
+  }, [refreshState]);
+
+  const nextStep = useCallback((): boolean => {
+    const success = trainingEngine.nextStep();
+    if (success) {
+      refreshState();
+    }
+    return success;
+  }, [refreshState]);
+
+  const prevStep = useCallback((): boolean => {
+    const success = trainingEngine.prevStep();
+    if (success) {
+      refreshState();
+    }
+    return success;
+  }, [refreshState]);
+
+  const completeStep = useCallback((stepId: string): boolean => {
+    const success = trainingEngine.completeStep(stepId);
     if (success) {
       trainingEngine.saveToLocalStorage();
       refreshState();
@@ -55,172 +76,81 @@ export function useTraining(autoRefresh = true) {
     return success;
   }, [refreshState]);
 
-  const selectLesson = useCallback((lessonId: string): boolean => {
-    const success = trainingEngine.selectLesson(lessonId);
-    if (success) {
-      refreshState();
-    }
-    return success;
-  }, [refreshState]);
-
-  const getCurrentTutorialStep = useCallback((): TutorialStep | null => {
-    return trainingEngine.getCurrentTutorialStep();
-  }, []);
-
-  const getCurrentTutorialStepIndex = useCallback((): number => {
-    return trainingEngine.getCurrentTutorialStepIndex();
-  }, []);
-
-  const getTotalTutorialSteps = useCallback((): number => {
-    return trainingEngine.getTotalTutorialSteps();
-  }, []);
-
-  const advanceTutorialStep = useCallback((): boolean => {
-    const success = trainingEngine.advanceTutorialStep();
-    if (success) {
-      refreshState();
-    }
-    return success;
-  }, [refreshState]);
-
-  const resetTutorialStep = useCallback((): void => {
-    trainingEngine.resetTutorialStep();
-    refreshState();
-  }, [refreshState]);
-
-  const startExam = useCallback((): boolean => {
-    const success = trainingEngine.startExam();
-    if (success) {
-      refreshState();
-    }
-    return success;
-  }, [refreshState]);
-
-  const completeExam = useCallback((gameStats: {
-    score: number;
-    distance: number;
-    height: number;
-    maxHeight: number;
-    time: number;
-    airCurrentCount: number;
-    shadowTracking: number;
-    flightStability: number;
-    collisions: number;
-  }): ExamResult | null => {
-    const result = trainingEngine.completeExam(gameStats);
+  const completeLesson = useCallback((score: number): TrainingResult | null => {
+    const result = trainingEngine.completeLesson(score);
     if (result) {
-      trainingEngine.saveToLocalStorage();
+      trainingStateEmitter.emit();
       refreshState();
     }
     return result;
   }, [refreshState]);
 
-  const claimPendingReward = useCallback((): PendingReward | null => {
-    const reward = trainingEngine.claimPendingReward();
-    if (reward) {
-      trainingEngine.saveToLocalStorage();
-      refreshState();
-    }
-    return reward;
+  const exitLesson = useCallback(() => {
+    trainingEngine.exitLesson();
+    trainingStateEmitter.emit();
+    refreshState();
   }, [refreshState]);
-
-  const returnToTraining = useCallback((): boolean => {
-    const success = trainingEngine.returnToTraining();
-    if (success) {
-      refreshState();
-    }
-    return success;
-  }, [refreshState]);
-
-  const getLesson = useCallback((lessonId: string): LessonConfig | undefined => {
-    return trainingEngine.getLesson(lessonId);
-  }, []);
 
   const getAllLessons = useCallback((): LessonConfig[] => {
     return trainingEngine.getAllLessons();
   }, []);
 
-  const getLessonsForChapter = useCallback((chapterId: string): LessonConfig[] => {
-    return trainingEngine.getLessonsForChapter(chapterId);
-  }, []);
-
-  const getChapter = useCallback((chapterId: string): ChapterConfig | undefined => {
-    return trainingEngine.getChapter(chapterId);
-  }, []);
-
-  const getAllChapters = useCallback((): ChapterConfig[] => {
-    return trainingEngine.getAllChapters();
+  const getLesson = useCallback((lessonId: string): LessonConfig | undefined => {
+    return trainingEngine.getLesson(lessonId);
   }, []);
 
   const getLessonProgress = useCallback((lessonId: string): LessonProgress => {
     return trainingEngine.getLessonProgress(lessonId);
   }, []);
 
-  const getChapterProgress = useCallback((chapterId: string): ChapterProgress => {
-    return trainingEngine.getChapterProgress(chapterId);
-  }, []);
-
   const isLessonUnlocked = useCallback((lessonId: string): boolean => {
     return trainingEngine.isLessonUnlocked(lessonId);
   }, []);
 
-  const isChapterUnlocked = useCallback((chapterId: string): boolean => {
-    return trainingEngine.isChapterUnlocked(chapterId);
+  const getCurrentLesson = useCallback((): LessonConfig | null => {
+    return trainingEngine.getCurrentLesson();
+  }, []);
+
+  const getCurrentStep = useCallback((): LessonStep | null => {
+    return trainingEngine.getCurrentStep();
+  }, []);
+
+  const isLastStep = useCallback((): boolean => {
+    return trainingEngine.isLastStep();
+  }, []);
+
+  const isFirstStep = useCallback((): boolean => {
+    return trainingEngine.isFirstStep();
   }, []);
 
   const getGameConfigOverride = useCallback((lessonId: string): GameConfigOverride | null => {
     return trainingEngine.getGameConfigOverride(lessonId);
   }, []);
 
-  const getTotalCoinsEarned = useCallback((): number => {
-    return trainingEngine.getTotalCoinsEarned();
-  }, []);
-
-  const getLastExamResult = useCallback((): ExamResult | null => {
-    return trainingEngine.getLastExamResult();
-  }, []);
-
-  const getPendingReward = useCallback((): PendingReward | null => {
-    return trainingEngine.getPendingReward();
-  }, []);
-
-  const getEntry = useCallback((): TrainingEntry | null => {
-    return trainingEngine.getEntry();
-  }, []);
-
   const reset = useCallback(() => {
     trainingEngine.reset();
     trainingEngine.saveToLocalStorage();
+    trainingStateEmitter.emit();
     refreshState();
   }, [refreshState]);
 
   return {
     state,
-    enroll,
-    selectLesson,
-    getCurrentTutorialStep,
-    getCurrentTutorialStepIndex,
-    getTotalTutorialSteps,
-    advanceTutorialStep,
-    resetTutorialStep,
-    startExam,
-    completeExam,
-    claimPendingReward,
-    returnToTraining,
-    getLesson,
+    startLesson,
+    nextStep,
+    prevStep,
+    completeStep,
+    completeLesson,
+    exitLesson,
     getAllLessons,
-    getLessonsForChapter,
-    getChapter,
-    getAllChapters,
+    getLesson,
     getLessonProgress,
-    getChapterProgress,
     isLessonUnlocked,
-    isChapterUnlocked,
+    getCurrentLesson,
+    getCurrentStep,
+    isLastStep,
+    isFirstStep,
     getGameConfigOverride,
-    getTotalCoinsEarned,
-    getLastExamResult,
-    getPendingReward,
-    getEntry,
     reset,
     refreshState,
   };

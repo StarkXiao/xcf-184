@@ -1,18 +1,11 @@
 import type {
-  ChapterConfig,
-  ChapterProgress,
-  ExamObjective,
-  ExamResult,
-  GameConfigOverride,
+  TrainingState,
   LessonConfig,
   LessonProgress,
-  LessonStatus,
-  PendingReward,
-  TrainingEntry,
-  TrainingState,
+  TrainingResult,
+  GameConfigOverride,
 } from './types';
-import { CHAPTERS, LESSONS } from './trainingData';
-import type { GameStats } from '../game/types';
+import { LESSONS, DEFAULT_LESSON_PROGRESS } from './trainingData';
 
 const SAVE_KEY = 'kite_training_save';
 
@@ -21,441 +14,263 @@ export class TrainingEngine {
 
   constructor() {
     this.state = {
-      status: 'idle',
-      entry: null,
       currentLessonId: null,
-      currentTutorialStepIndex: 0,
-      lessonProgress: {},
-      chapterProgress: {},
-      lastExamResult: null,
-      pendingReward: null,
+      currentStepIndex: 0,
+      phase: 'intro',
+      lessons: {},
+      totalCoinsEarned: 0,
+      lessonsCompleted: 0,
+      isTraining: false,
     };
-    this.initProgress();
+    this.initLessonProgress();
   }
 
-  private initProgress(): void {
-    CHAPTERS.forEach((chapter) => {
-      this.state.chapterProgress[chapter.id] = {
-        chapterId: chapter.id,
-        status: chapter.unlockChapterId === null ? 'available' : 'locked',
-        completedLessons: [],
-        masteredLessons: [],
-        completionBonusClaimed: false,
-      };
+  private initLessonProgress(): void {
+    LESSONS.forEach((lesson, index) => {
+      this.state.lessons[lesson.id] = DEFAULT_LESSON_PROGRESS(lesson.id, index);
     });
-
-    LESSONS.forEach((lesson) => {
-      this.state.lessonProgress[lesson.id] = {
-        lessonId: lesson.id,
-        status: this.isLessonInitiallyAvailable(lesson) ? 'available' : 'locked',
-        bestScore: 0,
-        attempts: 0,
-        objectivesPassed: [],
-        completedAt: null,
-        masteredAt: null,
-      };
-    });
-  }
-
-  private isLessonInitiallyAvailable(lesson: LessonConfig): boolean {
-    if (lesson.unlockLessonId !== null) return false;
-    const chapter = CHAPTERS.find((c) => c.id === lesson.chapterId);
-    if (!chapter) return false;
-    return chapter.unlockChapterId === null;
   }
 
   public getState(): TrainingState {
     return { ...this.state };
   }
 
-  public enroll(playerName: string): boolean {
-    if (this.state.status !== 'idle') return false;
-
-    const entry: TrainingEntry = {
-      id: `trainee_${Date.now()}`,
-      playerName,
-      enrolledAt: Date.now(),
-      totalCoinsEarned: 0,
-      totalScore: 0,
-    };
-
-    this.state.entry = entry;
-    this.state.status = 'enrolled';
-    return true;
-  }
-
-  public selectLesson(lessonId: string): boolean {
-    if (this.state.status !== 'enrolled' && this.state.status !== 'exam_completed') return false;
-    if (!this.isLessonUnlocked(lessonId)) return false;
-
-    const lesson = this.getLesson(lessonId);
-    if (!lesson) return false;
-
-    this.state.currentLessonId = lessonId;
-    this.state.currentTutorialStepIndex = 0;
-    this.state.lastExamResult = null;
-    this.state.status = 'lesson_active';
-
-    const progress = this.state.lessonProgress[lessonId];
-    if (progress && progress.status === 'available') {
-      progress.status = 'in_progress';
-    }
-
-    return true;
+  public getAllLessons(): LessonConfig[] {
+    return [...LESSONS];
   }
 
   public getLesson(lessonId: string): LessonConfig | undefined {
     return LESSONS.find((l) => l.id === lessonId);
   }
 
-  public getAllLessons(): LessonConfig[] {
-    return [...LESSONS];
-  }
-
-  public getLessonsForChapter(chapterId: string): LessonConfig[] {
-    return LESSONS.filter((l) => l.chapterId === chapterId).sort((a, b) => a.order - b.order);
-  }
-
-  public getChapter(chapterId: string): ChapterConfig | undefined {
-    return CHAPTERS.find((c) => c.id === chapterId);
-  }
-
-  public getAllChapters(): ChapterConfig[] {
-    return [...CHAPTERS].sort((a, b) => a.order - b.order);
-  }
-
   public getLessonProgress(lessonId: string): LessonProgress {
-    return (
-      this.state.lessonProgress[lessonId] || {
-        lessonId,
-        status: 'locked',
-        bestScore: 0,
-        attempts: 0,
-        objectivesPassed: [],
-        completedAt: null,
-        masteredAt: null,
-      }
-    );
-  }
-
-  public getChapterProgress(chapterId: string): ChapterProgress {
-    return (
-      this.state.chapterProgress[chapterId] || {
-        chapterId,
-        status: 'locked',
-        completedLessons: [],
-        masteredLessons: [],
-        completionBonusClaimed: false,
-      }
-    );
+    return this.state.lessons[lessonId] || {
+      lessonId,
+      status: 'locked',
+      completedSteps: [],
+      bestScore: 0,
+      attempts: 0,
+      completedAt: null,
+    };
   }
 
   public isLessonUnlocked(lessonId: string): boolean {
+    const progress = this.getLessonProgress(lessonId);
+    if (progress.status !== 'locked') {
+      return true;
+    }
+
     const lesson = this.getLesson(lessonId);
     if (!lesson) return false;
 
-    const chapterProgress = this.getChapterProgress(lesson.chapterId);
-    if (chapterProgress.status === 'locked') return false;
+    const lessonIndex = LESSONS.findIndex((l) => l.id === lessonId);
+    if (lessonIndex === 0) return true;
 
-    if (lesson.unlockLessonId === null) return true;
+    const prevLesson = LESSONS[lessonIndex - 1];
+    if (!prevLesson) return false;
 
-    const prevProgress = this.state.lessonProgress[lesson.unlockLessonId];
-    return prevProgress?.completedAt != null;
+    const prevProgress = this.getLessonProgress(prevLesson.id);
+    if (prevProgress.status !== 'completed') return false;
+
+    if (lesson.requiredScore !== undefined) {
+      if (prevProgress.bestScore < lesson.requiredScore) return false;
+    }
+
+    return true;
   }
 
-  public isChapterUnlocked(chapterId: string): boolean {
-    const chapter = this.getChapter(chapterId);
-    if (!chapter) return false;
-    if (chapter.unlockChapterId === null) return true;
+  public startLesson(lessonId: string): boolean {
+    if (!this.isLessonUnlocked(lessonId)) return false;
 
-    const prerequisiteProgress = this.getChapterProgress(chapter.unlockChapterId);
-    return prerequisiteProgress.completedLessons.length >= (this.getChapter(chapter.unlockChapterId)?.requiredCompletions || 0);
+    const lesson = this.getLesson(lessonId);
+    if (!lesson) return false;
+
+    this.state.currentLessonId = lessonId;
+    this.state.currentStepIndex = 0;
+    this.state.phase = lesson.phase;
+    this.state.isTraining = true;
+
+    const progress = this.state.lessons[lessonId];
+    if (progress) {
+      progress.status = 'in_progress';
+    }
+
+    return true;
   }
 
-  public getCurrentTutorialStep() {
+  public nextStep(): boolean {
+    if (!this.state.currentLessonId) return false;
+
+    const lesson = this.getLesson(this.state.currentLessonId);
+    if (!lesson) return false;
+
+    if (this.state.currentStepIndex < lesson.steps.length - 1) {
+      const currentStep = lesson.steps[this.state.currentStepIndex];
+      const progress = this.state.lessons[this.state.currentLessonId];
+      if (progress && !progress.completedSteps.includes(currentStep.id)) {
+        progress.completedSteps.push(currentStep.id);
+      }
+      this.state.currentStepIndex++;
+      return true;
+    }
+    return false;
+  }
+
+  public prevStep(): boolean {
+    if (!this.state.currentLessonId) return false;
+    if (this.state.currentStepIndex > 0) {
+      this.state.currentStepIndex--;
+      return true;
+    }
+    return false;
+  }
+
+  public getCurrentStep() {
     if (!this.state.currentLessonId) return null;
     const lesson = this.getLesson(this.state.currentLessonId);
     if (!lesson) return null;
-    return lesson.tutorials[this.state.currentTutorialStepIndex] || null;
+    return lesson.steps[this.state.currentStepIndex] || null;
   }
 
-  public getCurrentTutorialStepIndex(): number {
-    return this.state.currentTutorialStepIndex;
+  public getCurrentLesson(): LessonConfig | null {
+    if (!this.state.currentLessonId) return null;
+    return this.getLesson(this.state.currentLessonId) || null;
   }
 
-  public getTotalTutorialSteps(): number {
-    if (!this.state.currentLessonId) return 0;
+  public isLastStep(): boolean {
+    if (!this.state.currentLessonId) return true;
     const lesson = this.getLesson(this.state.currentLessonId);
-    return lesson?.tutorials.length || 0;
+    if (!lesson) return true;
+    return this.state.currentStepIndex >= lesson.steps.length - 1;
   }
 
-  public advanceTutorialStep(): boolean {
+  public isFirstStep(): boolean {
+    return this.state.currentStepIndex === 0;
+  }
+
+  public completeStep(stepId: string): boolean {
     if (!this.state.currentLessonId) return false;
-    const lesson = this.getLesson(this.state.currentLessonId);
-    if (!lesson) return false;
-    if (this.state.currentTutorialStepIndex >= lesson.tutorials.length - 1) return false;
-
-    this.state.currentTutorialStepIndex++;
-    return true;
+    const progress = this.state.lessons[this.state.currentLessonId];
+    if (progress && !progress.completedSteps.includes(stepId)) {
+      progress.completedSteps.push(stepId);
+      return true;
+    }
+    return false;
   }
 
-  public resetTutorialStep(): void {
-    this.state.currentTutorialStepIndex = 0;
-  }
-
-  public startExam(): boolean {
-    if (this.state.status !== 'lesson_active' || !this.state.currentLessonId) return false;
-    this.state.status = 'exam_active';
-    return true;
-  }
-
-  public completeExam(gameStats: GameStats): ExamResult | null {
-    if (this.state.status !== 'exam_active' || !this.state.currentLessonId) return null;
+  public completeLesson(score: number): TrainingResult | null {
+    if (!this.state.currentLessonId) return null;
 
     const lessonId = this.state.currentLessonId;
     const lesson = this.getLesson(lessonId);
     if (!lesson) return null;
 
-    const objectives: Record<string, { achieved: boolean; value: number; target: number; score: number }> = {};
-    let totalScore = 0;
-
-    lesson.examObjectives.forEach((obj) => {
-      const value = this.getMetricValue(gameStats, obj);
-      const achieved = this.checkObjective(obj, value);
-      const objScore = achieved ? obj.weight : 0;
-      totalScore += objScore;
-      objectives[obj.id] = {
-        achieved,
-        value,
-        target: obj.targetValue,
-        score: objScore,
-      };
-    });
-
-    const passed = totalScore >= lesson.passScore;
-    const mastered = totalScore >= lesson.masterScore;
-    const coinsEarned = mastered ? lesson.coinReward * 2 : passed ? lesson.coinReward : 0;
-
-    const result: ExamResult = {
-      lessonId,
-      score: totalScore,
-      passed,
-      mastered,
-      objectives,
-      coinsEarned,
-      completedAt: Date.now(),
-    };
-
-    this.state.lastExamResult = result;
-    this.updateLessonProgress(lessonId, totalScore, passed, mastered, Object.keys(objectives).filter((k) => objectives[k].achieved));
-
-    if (this.state.entry) {
-      this.state.entry.totalCoinsEarned += coinsEarned;
-      this.state.entry.totalScore += totalScore;
-    }
-
-    if (passed || mastered) {
-      this.state.pendingReward = {
-        type: mastered ? 'lesson_master' : 'lesson_pass',
-        coins: coinsEarned,
-        title: mastered ? '完美通关！' : '考核通过！',
-        description: mastered ? `你以精通成绩完成了「${lesson.name}」` : `你成功通过了「${lesson.name}」的考核`,
-        icon: mastered ? '🌟' : '✅',
-        lessonId,
-      };
-    }
-
-    const chapterReward = this.checkChapterCompletion(lesson.chapterId);
-    if (chapterReward) {
-      this.state.pendingReward = chapterReward;
-    }
-
-    this.state.currentLessonId = null;
-    this.state.status = this.checkAllCompleted() ? 'all_completed' : 'exam_completed';
-
-    return result;
-  }
-
-  private getMetricValue(stats: GameStats, objective: ExamObjective): number {
-    switch (objective.metric) {
-      case 'distance':
-        return stats.distance;
-      case 'height':
-        return stats.maxHeight;
-      case 'airCurrentCount':
-        return stats.airCurrentCount;
-      case 'shadowTracking':
-        return stats.shadowTracking;
-      case 'flightStability':
-        return stats.flightStability;
-      case 'collisions':
-        return stats.collisions;
-      case 'time':
-        return stats.time;
-      case 'score':
-        return stats.score;
-      default:
-        return 0;
-    }
-  }
-
-  private checkObjective(objective: ExamObjective, value: number): boolean {
-    if (objective.isPenalty) {
-      return value <= objective.targetValue;
-    }
-    return value >= objective.targetValue;
-  }
-
-  private updateLessonProgress(lessonId: string, score: number, passed: boolean, mastered: boolean, objectivesPassed: string[]): void {
-    const progress = this.state.lessonProgress[lessonId];
-    if (!progress) return;
+    const progress = this.state.lessons[lessonId];
+    if (!progress) return null;
 
     progress.attempts++;
-    progress.bestScore = Math.max(progress.bestScore, score);
-    progress.objectivesPassed = Array.from(new Set([...progress.objectivesPassed, ...objectivesPassed]));
+    const bestScore = Math.max(progress.bestScore, score);
+    progress.bestScore = bestScore;
 
-    if (passed && !progress.completedAt) {
-      progress.completedAt = Date.now();
+    const targetScore = lesson.steps.find((s) => s.targetScore)?.targetScore || 0;
+    const passed = score >= targetScore || lesson.type !== 'exam';
+    const stars = this.calculateStars(score, targetScore);
+
+    let coinReward = 0;
+    if (progress.status !== 'completed') {
+      coinReward = lesson.coinReward;
+      if (stars >= 3) {
+        coinReward = Math.floor(coinReward * 1.5);
+      }
+      this.state.totalCoinsEarned += coinReward;
+    } else if (bestScore > progress.bestScore - score) {
+      coinReward = Math.floor(lesson.coinReward * 0.2);
+      this.state.totalCoinsEarned += coinReward;
+    }
+
+    if (passed) {
       progress.status = 'completed';
+      progress.completedAt = Date.now();
+      this.state.lessonsCompleted++;
+      this.unlockNextLesson(lessonId);
     }
 
-    if (mastered) {
-      progress.masteredAt = Date.now();
-      progress.status = 'mastered';
+    this.saveToLocalStorage();
+
+    return {
+      lessonId,
+      score,
+      passed,
+      stars,
+      coinReward,
+      completedAt: Date.now(),
+    };
+  }
+
+  private calculateStars(score: number, targetScore: number): number {
+    if (targetScore <= 0) return 3;
+    const ratio = score / targetScore;
+    if (ratio >= 2) return 3;
+    if (ratio >= 1.3) return 2;
+    if (ratio >= 1) return 1;
+    return 0;
+  }
+
+  private unlockNextLesson(lessonId: string): void {
+    const lesson = this.getLesson(lessonId);
+    if (!lesson || !lesson.unlockNextId) return;
+
+    const nextProgress = this.state.lessons[lesson.unlockNextId];
+    if (nextProgress && nextProgress.status === 'locked') {
+      nextProgress.status = 'available';
     }
-
-    this.checkLessonUnlocks();
   }
 
-  private checkLessonUnlocks(): void {
-    LESSONS.forEach((lesson) => {
-      const progress = this.state.lessonProgress[lesson.id];
-      if (!progress || progress.status !== 'locked') return;
-
-      if (this.isLessonUnlocked(lesson.id)) {
-        progress.status = 'available';
-      }
-    });
-
-    CHAPTERS.forEach((chapter) => {
-      const progress = this.state.chapterProgress[chapter.id];
-      if (!progress || progress.status !== 'locked') return;
-
-      if (this.isChapterUnlocked(chapter.id)) {
-        progress.status = 'available';
-      }
-    });
-  }
-
-  private checkChapterCompletion(chapterId: string): PendingReward | null {
-    const chapter = this.getChapter(chapterId);
-    const chapterProgress = this.getChapterProgress(chapterId);
-    if (!chapter || chapterProgress.completionBonusClaimed) return null;
-
-    const lessons = this.getLessonsForChapter(chapterId);
-    const completedIds = lessons.filter((l) => this.state.lessonProgress[l.id]?.completedAt).map((l) => l.id);
-    const masteredIds = lessons.filter((l) => this.state.lessonProgress[l.id]?.masteredAt).map((l) => l.id);
-
-    chapterProgress.completedLessons = completedIds;
-    chapterProgress.masteredLessons = masteredIds;
-
-    if (completedIds.length >= chapter.requiredCompletions && !chapterProgress.completionBonusClaimed) {
-      chapterProgress.status = masteredIds.length >= lessons.length ? 'mastered' : 'completed';
-      chapterProgress.completionBonusClaimed = true;
-
-      if (this.state.entry) {
-        this.state.entry.totalCoinsEarned += chapter.completionCoinBonus;
-      }
-
-      return {
-        type: 'chapter_complete',
-        coins: chapter.completionCoinBonus,
-        title: `${chapter.name} 完成！`,
-        description: `恭喜你完成了整章课程，获得章节奖励！`,
-        icon: '🎊',
-        chapterId,
-      };
-    }
-
-    return null;
-  }
-
-  private checkAllCompleted(): boolean {
-    return CHAPTERS.every((ch) => {
-      const progress = this.getChapterProgress(ch.id);
-      return progress.status === 'completed' || progress.status === 'mastered';
-    });
-  }
-
-  public claimPendingReward(): PendingReward | null {
-    const reward = this.state.pendingReward;
-    this.state.pendingReward = null;
-    return reward;
-  }
-
-  public getPendingReward(): PendingReward | null {
-    return this.state.pendingReward;
-  }
-
-  public returnToTraining(): boolean {
-    if (this.state.status !== 'exam_completed' && this.state.status !== 'all_completed') return false;
-    this.state.status = 'enrolled';
+  public exitLesson(): void {
     this.state.currentLessonId = null;
-    return true;
+    this.state.currentStepIndex = 0;
+    this.state.isTraining = false;
   }
 
   public getGameConfigOverride(lessonId: string): GameConfigOverride | null {
     const lesson = this.getLesson(lessonId);
     if (!lesson) return null;
+    if (lesson.worldSize === undefined) return null;
 
     return {
       worldSize: lesson.worldSize,
-      gravity: lesson.gravity,
-      airCurrentSpawnRate: lesson.airCurrentSpawnRate,
-      minAirCurrentStrength: lesson.minAirCurrentStrength,
-      maxAirCurrentStrength: lesson.maxAirCurrentStrength,
-      minBuildingHeight: lesson.minBuildingHeight,
-      maxBuildingHeight: lesson.maxBuildingHeight,
-      buildingDensity: lesson.buildingDensity,
-      windSpeed: lesson.windSpeed,
-      turbulenceLevel: lesson.turbulenceLevel,
-      cloudCoverage: lesson.cloudCoverage,
+      gravity: lesson.gravity || 0.015,
+      airCurrentSpawnRate: lesson.airCurrentSpawnRate || 0.03,
+      minAirCurrentStrength: lesson.minAirCurrentStrength || 0.06,
+      maxAirCurrentStrength: lesson.maxAirCurrentStrength || 0.18,
+      minBuildingHeight: lesson.minBuildingHeight || 15,
+      maxBuildingHeight: lesson.maxBuildingHeight || 50,
+      buildingDensity: lesson.buildingDensity || 0.3,
+      windSpeed: 0.3,
+      turbulenceLevel: lesson.turbulenceLevel || 0.2,
+      cloudCoverage: lesson.cloudCoverage || 0.4,
     };
-  }
-
-  public getTotalCoinsEarned(): number {
-    return this.state.entry?.totalCoinsEarned || 0;
-  }
-
-  public getLastExamResult(): ExamResult | null {
-    return this.state.lastExamResult;
-  }
-
-  public getEntry(): TrainingEntry | null {
-    return this.state.entry;
   }
 
   public reset(): void {
     this.state = {
-      status: 'idle',
-      entry: null,
       currentLessonId: null,
-      currentTutorialStepIndex: 0,
-      lessonProgress: {},
-      chapterProgress: {},
-      lastExamResult: null,
-      pendingReward: null,
+      currentStepIndex: 0,
+      phase: 'intro',
+      lessons: {},
+      totalCoinsEarned: 0,
+      lessonsCompleted: 0,
+      isTraining: false,
     };
-    this.initProgress();
+    this.initLessonProgress();
   }
 
   public saveToLocalStorage(): void {
     try {
       const data = {
-        status: this.state.status === 'lesson_active' || this.state.status === 'exam_active' ? 'enrolled' : this.state.status,
-        entry: this.state.entry,
-        lessonProgress: this.state.lessonProgress,
-        chapterProgress: this.state.chapterProgress,
+        lessons: this.state.lessons,
+        totalCoinsEarned: this.state.totalCoinsEarned,
+        lessonsCompleted: this.state.lessonsCompleted,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -470,31 +285,21 @@ export class TrainingEngine {
 
       const data = JSON.parse(saved);
 
-      if (data.entry) {
-        this.state.entry = data.entry;
-      }
-
-      if (data.lessonProgress) {
-        Object.keys(data.lessonProgress).forEach((id) => {
-          if (this.state.lessonProgress[id]) {
-            this.state.lessonProgress[id] = data.lessonProgress[id];
+      if (data.lessons) {
+        Object.keys(data.lessons).forEach((lessonId) => {
+          if (this.state.lessons[lessonId]) {
+            this.state.lessons[lessonId] = data.lessons[lessonId];
           }
         });
       }
 
-      if (data.chapterProgress) {
-        Object.keys(data.chapterProgress).forEach((id) => {
-          if (this.state.chapterProgress[id]) {
-            this.state.chapterProgress[id] = data.chapterProgress[id];
-          }
-        });
+      if (typeof data.totalCoinsEarned === 'number') {
+        this.state.totalCoinsEarned = data.totalCoinsEarned;
       }
 
-      if (data.status) {
-        this.state.status = data.status;
+      if (typeof data.lessonsCompleted === 'number') {
+        this.state.lessonsCompleted = data.lessonsCompleted;
       }
-
-      this.checkLessonUnlocks();
 
       return true;
     } catch (e) {

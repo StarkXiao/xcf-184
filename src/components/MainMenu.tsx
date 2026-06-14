@@ -4,9 +4,10 @@ interface MainMenuProps {
   onStart: () => void;
   onWorkshop: () => void;
   onTournament: () => void;
+  onTraining: () => void;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop, onTournament }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop, onTournament, onTraining }) => {
   return (
     <div className="menu-overlay">
       <div className="menu-content">
@@ -102,6 +103,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop, onTourn
         <button className="tournament-menu-button" onClick={onTournament}>
           <span className="button-icon">🏆</span>
           <span className="button-text">赛事中心</span>
+        </button>
+
+        <button className="tournament-menu-button" onClick={onTraining} style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)' }}>
+          <span className="button-icon">🎓</span>
+          <span className="button-text">教学训练营</span>
         </button>
 
         <div className="tips">
