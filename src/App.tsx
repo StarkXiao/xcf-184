@@ -23,6 +23,9 @@ import type { LevelScene } from './levelEditor/types';
 import { JourneyCenter, useJourney } from './journey';
 import type { NewlyUnlockedAchievement } from './journey/journeyEngine';
 import type { TrajectoryPoint, FlightMode } from './journey/types';
+import { FestivalCenter } from './festival';
+import { festivalEngine } from './festival/festivalEngine';
+import { festivalStateEmitter } from './festival/useFestival';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
@@ -30,6 +33,7 @@ import './training/training.css';
 import './weatherLab/weatherLab.css';
 import './levelEditor/levelEditor.css';
 import './journey/journey.css';
+import './festival/festival.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -67,6 +71,8 @@ function App() {
   const [levelEditorResult, setLevelEditorResult] = useState<{ levelId: string; score: number; isWin: boolean } | null>(null);
   const [showJourney, setShowJourney] = useState(false);
   const [newJourneyAchievements, setNewJourneyAchievements] = useState<NewlyUnlockedAchievement[]>([]);
+  const [showFestival, setShowFestival] = useState(false);
+  const [festivalSceneId, setFestivalSceneId] = useState<string | null>(null);
   const [, setForceUpdate] = useState(0);
   const flightDataPointsRef = useRef<FlightDataPoint[]>([]);
   const flightDataLastSaveTimeRef = useRef<number>(0);
@@ -78,6 +84,7 @@ function App() {
   const tournamentTrackIdRef = useRef<string | null>(null);
   const trainingLessonIdRef = useRef<string | null>(null);
   const weatherLabSceneIdRef = useRef<string | null>(null);
+  const festivalSceneIdRef = useRef<string | null>(null);
   const gameStateRef = useRef<GameState>('menu');
   const lastScoreUpdateRef = useRef(0);
 
@@ -96,6 +103,10 @@ function App() {
   useEffect(() => {
     levelEditorLevelIdRef.current = levelEditorLevelId;
   }, [levelEditorLevelId]);
+
+  useEffect(() => {
+    festivalSceneIdRef.current = festivalSceneId;
+  }, [festivalSceneId]);
 
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -161,8 +172,18 @@ function App() {
   const handleGameOver = useCallback((gameOverStats: GameStats) => {
     setFinalStats(gameOverStats);
 
-    const adjustedScore = workshop.calculateFinalScore(gameOverStats.score);
-    const coins = workshop.calculateCoinsEarned(gameOverStats.score);
+    const savedFestivalSceneId = festivalSceneIdRef.current;
+    const baseAdjustedScore = workshop.calculateFinalScore(gameOverStats.score);
+    const baseCoins = workshop.calculateCoinsEarned(gameOverStats.score);
+
+    const adjustedScore = festivalEngine.calculateAdjustedScore(
+      baseAdjustedScore,
+      savedFestivalSceneId || undefined
+    );
+    const coins = festivalEngine.calculateAdjustedCoins(
+      baseCoins,
+      savedFestivalSceneId || undefined
+    );
 
     setAdjustedFinalStats({
       ...gameOverStats,
@@ -173,6 +194,22 @@ function App() {
     setEarnedCoins(coins);
 
     workshop.addCoins(coins);
+
+    if (savedFestivalSceneId) {
+      festivalEngine.recordFlight({
+        score: adjustedScore,
+        distance: gameOverStats.distance,
+        maxHeight: gameOverStats.maxHeight,
+        airCurrentCount: gameOverStats.airCurrentCount,
+        collisions: gameOverStats.collisions,
+        sceneId: savedFestivalSceneId,
+      });
+      const festivalCurrencyEarned = Math.floor(adjustedScore * 0.02);
+      if (festivalCurrencyEarned > 0) {
+        festivalEngine.addFestivalCurrency(festivalCurrencyEarned);
+      }
+      festivalStateEmitter.emit();
+    }
 
     const savedTrackId = tournamentTrackIdRef.current;
     const savedLessonId = trainingLessonIdRef.current;
@@ -215,6 +252,16 @@ function App() {
       flightMode = 'levelEditor';
       const level = levelEditorEngine.getLevelById(savedLevelId || levelEditorLevelId || '');
       levelName = level?.name;
+    } else if (savedFestivalSceneId) {
+      flightMode = 'tournament';
+      const scene = festivalEngine.getScene(savedFestivalSceneId);
+      sceneName = scene?.name;
+    }
+
+    if (savedFestivalSceneId) {
+      festivalSceneIdRef.current = null;
+      setFestivalSceneId(null);
+      festivalStateEmitter.emit();
     }
 
     const currentTrackId = tournamentTrackIdRef.current;
@@ -416,6 +463,11 @@ function App() {
         levelEditorEngine.setCurrentLevel(level);
       }
     }
+    const currentFestivalSceneId = festivalSceneIdRef.current;
+    if (currentFestivalSceneId) {
+      festivalEngine.selectScene(currentFestivalSceneId);
+      festivalStateEmitter.emit();
+    }
     lastScoreUpdateRef.current = 0;
     flightDataPointsRef.current = [];
     flightDataLastSaveTimeRef.current = 0;
@@ -441,6 +493,11 @@ function App() {
       levelEditorLevelIdRef.current = null;
       setLevelEditorLevelId(null);
     }
+    if (festivalSceneIdRef.current) {
+      festivalSceneIdRef.current = null;
+      setFestivalSceneId(null);
+      festivalStateEmitter.emit();
+    }
     gameEngineRef.current?.clearLevelScene();
     setGameState('menu');
   };
@@ -461,6 +518,58 @@ function App() {
     setShowJourney(false);
     if (newJourneyAchievements.length > 0) {
       setNewJourneyAchievements([]);
+    }
+  };
+
+  const handleOpenFestival = () => {
+    setShowFestival(true);
+  };
+
+  const handleCloseFestival = () => {
+    setShowFestival(false);
+  };
+
+  const handleStartFestivalScene = (sceneId: string) => {
+    const configOverride = festivalEngine.getGameConfigOverride(sceneId);
+    const success = festivalEngine.selectScene(sceneId);
+    if (!success) return;
+
+    setFestivalSceneId(sceneId);
+    festivalSceneIdRef.current = sceneId;
+    setShowFestival(false);
+    lastScoreUpdateRef.current = 0;
+    flightDataPointsRef.current = [];
+    flightDataLastSaveTimeRef.current = 0;
+    festivalStateEmitter.emit();
+
+    if (gameEngineRef.current && configOverride) {
+      const gravity = configOverride.gravity ?? 0.015;
+      const turbulence = configOverride.turbulenceLevel ?? 0.2;
+      gameEngineRef.current.reconfigure({
+        worldSize: configOverride.worldSize,
+        gravity: configOverride.gravity,
+        airCurrentSpawnRate: configOverride.airCurrentSpawnRate,
+        minAirCurrentStrength: configOverride.minAirCurrentStrength,
+        maxAirCurrentStrength: configOverride.maxAirCurrentStrength,
+        buildingDensity: configOverride.buildingDensity,
+        turbulenceLevel: configOverride.turbulenceLevel,
+        cloudCoverage: configOverride.cloudCoverage,
+      });
+
+      const distanceBuff = festivalEngine.getTotalBuffValue('distance');
+      const heightBuff = festivalEngine.getTotalBuffValue('height');
+      const stabilityBuff = festivalEngine.getTotalBuffValue('stability');
+
+      gameEngineRef.current.setFlightParams({
+        ...workshop.flightParams,
+        maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + gravity)) * (1 + distanceBuff * 0.5),
+        stabilityFactor: workshop.flightParams.stabilityFactor * (1 - turbulence * 0.3) * (1 + stabilityBuff),
+        liftForce: workshop.flightParams.liftForce * (1 + heightBuff),
+      });
+
+      gameEngineRef.current.restart();
+    } else if (gameEngineRef.current) {
+      gameEngineRef.current.restart();
     }
   };
 
@@ -643,6 +752,7 @@ function App() {
           onWeatherLab={handleOpenWeatherLab}
           onLevelEditor={handleOpenLevelEditor}
           onJourney={handleOpenJourney}
+          onFestival={handleOpenFestival}
         />
       )}
 
@@ -725,6 +835,13 @@ function App() {
         <JourneyCenter
           onClose={handleCloseJourney}
           newAchievements={newJourneyAchievements}
+        />
+      )}
+
+      {showFestival && (
+        <FestivalCenter
+          onClose={handleCloseFestival}
+          onStartScene={handleStartFestivalScene}
         />
       )}
     </div>

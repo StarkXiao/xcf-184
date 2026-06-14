@@ -8,9 +8,10 @@ interface MainMenuProps {
   onWeatherLab: () => void;
   onLevelEditor: () => void;
   onJourney: () => void;
+  onFestival: () => void;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop, onTournament, onTraining, onWeatherLab, onLevelEditor, onJourney }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop, onTournament, onTraining, onWeatherLab, onLevelEditor, onJourney, onFestival }) => {
   return (
     <div className="menu-overlay">
       <div className="menu-content">
@@ -126,6 +127,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop, onTourn
         <button className="tournament-menu-button" onClick={onJourney} style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444)' }}>
           <span className="button-icon">🗂️</span>
           <span className="button-text">旅程档案</span>
+        </button>
+
+        <button className="tournament-menu-button" onClick={onFestival} style={{ background: 'linear-gradient(135deg, #ec4899, #f472b6)' }}>
+          <span className="button-icon">🎉</span>
+          <span className="button-text">节日活动</span>
         </button>
 
         <div className="tips">
