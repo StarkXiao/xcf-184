@@ -201,18 +201,27 @@ export class ShadowTrackingSystem {
 
     const shadowX = kitePosition.x;
     const shadowZ = kitePosition.z - 20;
-    const dir = new THREE.Vector2(kiteVelocity.x, kiteVelocity.z);
-    if (dir.length() < 0.001) {
-      dir.set(0, -1);
-    }
-    dir.normalize();
 
+    let dirX = kiteVelocity.x;
+    let dirZ = kiteVelocity.z;
+
+    const speed = Math.sqrt(dirX * dirX + dirZ * dirZ);
+    if (speed < 0.01) {
+      dirX = 0;
+      dirZ = -1;
+    } else {
+      dirX /= speed;
+      dirZ /= speed;
+    }
+
+    const pathLength = this.config.shadowTrackingTargetDistance * 1.5;
     for (let i = 0; i < 20; i++) {
       const t = i / 20;
-      const distance = t * this.config.shadowTrackingTargetDistance;
-      positions[i * 3] = shadowX + dir.x * distance;
+      const distance = t * pathLength;
+      const waveOffset = Math.sin(t * Math.PI * 2 + performance.now() * 0.003) * 3 * t;
+      positions[i * 3] = shadowX + dirX * distance + waveOffset;
       positions[i * 3 + 1] = 0.06;
-      positions[i * 3 + 2] = shadowZ - 20 + dir.y * distance - distance;
+      positions[i * 3 + 2] = shadowZ + dirZ * distance;
     }
 
     this.predictedPathMesh.geometry.attributes.position.needsUpdate = true;
@@ -225,82 +234,122 @@ export class ShadowTrackingSystem {
     kitePosition: THREE.Vector3,
     kiteVelocity: THREE.Vector3
   ): void {
-    const dir = new THREE.Vector2(kiteVelocity.x, kiteVelocity.z);
-    if (dir.length() < 0.001) {
-      dir.set(0, -1);
+    let dirX = kiteVelocity.x;
+    let dirZ = kiteVelocity.z;
+
+    const speed = Math.sqrt(dirX * dirX + dirZ * dirZ);
+    if (speed < 0.01) {
+      dirX = 0;
+      dirZ = -1;
+    } else {
+      dirX /= speed;
+      dirZ /= speed;
     }
-    dir.normalize();
+
+    const perpX = -dirZ;
+    const perpZ = dirX;
 
     const shadowX = kitePosition.x;
     const shadowZ = kitePosition.z - 20;
 
     for (let i = 0; i < this.markerMeshes.length; i++) {
       const marker = this.markerMeshes[i];
-      const distance = (i + 1) * 12;
-      const markerX = shadowX + dir.x * distance + (Math.sin(i * 1.5) * 5);
-      const markerZ = shadowZ - 20 + dir.y * distance - distance + (Math.cos(i * 1.5) * 5);
+      const distance = (i + 1) * 15;
+      const offset = Math.sin(i * 1.2 + performance.now() * 0.002) * 8;
+      const markerX = shadowX + dirX * distance + perpX * offset;
+      const markerZ = shadowZ + dirZ * distance + perpZ * offset;
 
       marker.position.set(markerX, 0.08, markerZ);
       marker.visible = true;
 
       const material = marker.material as THREE.MeshBasicMaterial;
-      const hue = (i / this.markerMeshes.length) * 0.3 + 0.5;
-      material.color.setHSL(hue, 0.8, 0.5);
-      material.opacity = 0.4 + this.currentShadowBrightness * 0.4;
+      const hue = (i / this.markerMeshes.length) * 0.25 + 0.5;
+      material.color.setHSL(hue, 0.8, 0.5 + this.currentShadowBrightness * 0.3);
+      material.opacity = 0.3 + this.currentShadowBrightness * 0.4;
 
-      const pulse = 1 + Math.sin(performance.now() * 0.005 + i) * 0.2;
-      marker.scale.setScalar(pulse);
+      const pulse = 1 + Math.sin(performance.now() * 0.005 + i * 0.8) * 0.25;
+      marker.scale.setScalar(pulse * (0.6 + this.currentShadowBrightness * 0.6));
     }
   }
 
   private calculateTrackingScore(
-    delta: number,
+    _delta: number,
     kitePosition: THREE.Vector3,
-    _kiteVelocity: THREE.Vector3
+    kiteVelocity: THREE.Vector3
   ): void {
-    if (this.shadowTrail.length < 5) {
+    if (this.shadowTrail.length < 3) {
       this.shadowTrackingScore = 0.5;
       return;
     }
 
-    const shadowX = kitePosition.x;
-    const shadowZ = kitePosition.z - 20;
-    const currentPos = new THREE.Vector2(shadowX, shadowZ);
+    const horizontalSpeed = Math.sqrt(
+      kiteVelocity.x * kiteVelocity.x + kiteVelocity.z * kiteVelocity.z
+    );
 
-    let pathDeviation = 0;
-    let validSamples = 0;
-    for (let i = 2; i < Math.min(15, this.shadowTrail.length); i++) {
-      const trailPoint = this.shadowTrail[i];
-      const trailPos = new THREE.Vector2(trailPoint.x, trailPoint.z);
-      const nextTrailPoint = this.shadowTrail[i - 1];
-      const nextTrailPos = new THREE.Vector2(nextTrailPoint.x, nextTrailPoint.z);
+    const speedScore = Math.min(1, horizontalSpeed / 0.3);
 
-      const segmentDir = new THREE.Vector2()
-        .subVectors(nextTrailPos, trailPos)
-        .normalize();
+    let directionConsistency = 0.5;
+    if (this.shadowTrail.length >= 8) {
+      const recent = this.shadowTrail.slice(0, 8);
+      let totalAngleChange = 0;
+      let validSegments = 0;
 
-      const toCurrent = new THREE.Vector2().subVectors(currentPos, trailPos);
-      const projection = toCurrent.dot(segmentDir);
-      const projectedPos = trailPos
-        .clone()
-        .add(segmentDir.multiplyScalar(projection));
-      const distance = currentPos.distanceTo(projectedPos);
+      for (let i = 0; i < recent.length - 2; i++) {
+        const p1 = new THREE.Vector2(recent[i].x, recent[i].z);
+        const p2 = new THREE.Vector2(recent[i + 1].x, recent[i + 1].z);
+        const p3 = new THREE.Vector2(recent[i + 2].x, recent[i + 2].z);
 
-      pathDeviation += distance;
-      validSamples++;
+        const v1 = new THREE.Vector2().subVectors(p2, p1);
+        const v2 = new THREE.Vector2().subVectors(p3, p2);
+
+        if (v1.length() > 0.1 && v2.length() > 0.1) {
+          v1.normalize();
+          v2.normalize();
+          const dot = Math.max(-1, Math.min(1, v1.dot(v2)));
+          const angle = Math.acos(dot);
+          totalAngleChange += angle;
+          validSegments++;
+        }
+      }
+
+      if (validSegments > 0) {
+        const avgAngleChange = totalAngleChange / validSegments;
+        directionConsistency = Math.max(0, 1 - avgAngleChange / 0.8);
+      }
     }
 
-    const avgDeviation = validSamples > 0 ? pathDeviation / validSamples : 0;
-    const maxAllowedDeviation = this.config.shadowTrackingTargetDistance * 0.4;
-    const deviationScore = Math.max(0, 1 - avgDeviation / maxAllowedDeviation);
+    const forwardAlignment = this.calculateForwardAlignment(kiteVelocity);
+
+    const trackingScore =
+      speedScore * 0.25 +
+      directionConsistency * 0.45 +
+      forwardAlignment * 0.3;
 
     this.shadowDeviationAccumulator =
-      this.shadowDeviationAccumulator * 0.9 + deviationScore * 0.1;
-    this.shadowTrackingScore = Math.max(0, Math.min(1, this.shadowDeviationAccumulator));
+      this.shadowDeviationAccumulator * 0.92 + trackingScore * 0.08;
+    this.shadowTrackingScore = Math.max(0.1, Math.min(1, this.shadowDeviationAccumulator));
+    void kitePosition;
+  }
+
+  private calculateForwardAlignment(kiteVelocity: THREE.Vector3): number {
+    const horizontalSpeed = Math.sqrt(
+      kiteVelocity.x * kiteVelocity.x + kiteVelocity.z * kiteVelocity.z
+    );
+
+    if (horizontalSpeed < 0.01) return 0.5;
+
+    const forwardDir = new THREE.Vector2(0, -1);
+    const velocityDir = new THREE.Vector2(
+      kiteVelocity.x / horizontalSpeed,
+      kiteVelocity.z / horizontalSpeed
+    );
+
+    const dot = forwardDir.dot(velocityDir);
+    return Math.max(0, Math.min(1, (dot + 1) / 2));
   }
 
   private updateFlightStability(
-    delta: number,
+    _delta: number,
     kiteVelocity: THREE.Vector3
   ): void {
     const currentVelocityLength = kiteVelocity.length();
@@ -321,7 +370,7 @@ export class ShadowTrackingSystem {
     this.flightStability = Math.max(0.3, Math.min(1, this.flightStability));
 
     this.lastVelocityLength = currentVelocityLength;
-    void delta;
+    void _delta;
   }
 
   private calculateDirectionStability(kiteVelocity: THREE.Vector3): number {

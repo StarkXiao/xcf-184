@@ -218,8 +218,9 @@ export class AirCurrentSystem {
         'turbulence',
       ];
       const useBright = effectiveBrightness > 0.6;
-      const type = (useBright ? brightTypes : types)[
-        Math.floor(Math.random() * (useBright ? brightTypes.length : types.length)
+      const typeArray = useBright ? brightTypes : types;
+      const type = typeArray[
+        Math.floor(Math.random() * typeArray.length)
       ];
 
       this.spawnAirCurrent(spawnPosition, type, undefined, effectiveBrightness);
