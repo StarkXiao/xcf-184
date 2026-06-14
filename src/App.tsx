@@ -174,6 +174,49 @@ function App() {
 
     workshop.addCoins(coins);
 
+    const savedTrackId = tournamentTrackIdRef.current;
+    const savedLessonId = trainingLessonIdRef.current;
+    const savedWeatherSceneId = weatherLabSceneIdRef.current;
+    const savedLevelId = levelEditorLevelIdRef.current;
+    const savedFlightTrajectory = flightDataPointsRef.current ? [...flightDataPointsRef.current] : [];
+
+    let flightMode: FlightMode = 'free';
+    let trackName: string | undefined;
+    let lessonName: string | undefined;
+    let sceneName: string | undefined;
+    let levelName: string | undefined;
+    let weatherCondition: string | undefined;
+
+    if (savedTrackId) {
+      flightMode = 'tournament';
+      const track = tournamentEngine.getTrack(savedTrackId);
+      trackName = track?.name;
+    } else if (savedLessonId) {
+      flightMode = 'training';
+      const lesson = trainingEngine.getLesson(savedLessonId);
+      lessonName = lesson?.title;
+    } else if (savedWeatherSceneId) {
+      flightMode = 'weatherLab';
+      const scene = weatherLabEngine.getSceneById(savedWeatherSceneId);
+      sceneName = scene?.name;
+      if (scene) {
+        const wc = scene.weatherConfig;
+        weatherCondition = wc
+          ? wc.cloudCoverage > 0.7
+            ? '多云'
+            : wc.turbulenceLevel > 0.4
+            ? '暴风'
+            : wc.cloudCoverage > 0.4
+            ? '晴间多云'
+            : '晴朗'
+          : undefined;
+      }
+    } else if (savedLevelId || levelEditorLevelId) {
+      flightMode = 'levelEditor';
+      const level = levelEditorEngine.getLevelById(savedLevelId || levelEditorLevelId || '');
+      levelName = level?.name;
+    }
+
     const currentTrackId = tournamentTrackIdRef.current;
     if (currentTrackId) {
       const result = tournamentEngine.completeTrack(adjustedScore);
@@ -243,44 +286,7 @@ function App() {
       setLevelEditorLevelId(null);
     }
 
-    let flightMode: FlightMode = 'free';
-    let trackName: string | undefined;
-    let lessonName: string | undefined;
-    let sceneName: string | undefined;
-    let levelName: string | undefined;
-    let weatherCondition: string | undefined;
-
-    if (tournamentTrackIdRef.current) {
-      flightMode = 'tournament';
-      const track = tournamentEngine.getTrack(tournamentTrackIdRef.current);
-      trackName = track?.name;
-    } else if (trainingLessonIdRef.current) {
-      flightMode = 'training';
-      const lesson = trainingEngine.getLesson(trainingLessonIdRef.current);
-      lessonName = lesson?.title;
-    } else if (weatherLabSceneIdRef.current) {
-      flightMode = 'weatherLab';
-      const scene = weatherLabEngine.getSceneById(weatherLabSceneIdRef.current);
-      sceneName = scene?.name;
-      if (scene) {
-        const wc = scene.weatherConfig;
-        weatherCondition = wc
-          ? wc.cloudCoverage > 0.7
-            ? '多云'
-            : wc.turbulenceLevel > 0.4
-            ? '暴风'
-            : wc.cloudCoverage > 0.4
-            ? '晴间多云'
-            : '晴朗'
-          : undefined;
-      }
-    } else if (levelEditorLevelIdRef.current || levelEditorLevelId) {
-      flightMode = 'levelEditor';
-      const level = levelEditorEngine.getLevelById(levelEditorLevelIdRef.current || levelEditorLevelId || '');
-      levelName = level?.name;
-    }
-
-    const journeyTrajectory: TrajectoryPoint[] = flightDataPointsRef.current.map((dp) => ({
+    const journeyTrajectory: TrajectoryPoint[] = savedFlightTrajectory.map((dp) => ({
       t: dp.timestamp,
       x: dp.position.x,
       y: dp.position.y,
