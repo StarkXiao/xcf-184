@@ -6,7 +6,10 @@ import { MainMenu } from './components/MainMenu';
 import { GameHUD } from './components/GameHUD';
 import { PauseMenu } from './components/PauseMenu';
 import { GameOverScreen } from './components/GameOverScreen';
+import { Workshop } from './workshop/components/Workshop';
+import { useWorkshop } from './workshop/useWorkshop';
 import './App.css';
+import './workshop/workshop.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -27,6 +30,11 @@ function App() {
   const [stats, setStats] = useState<GameStats>(DEFAULT_STATS);
   const [finalStats, setFinalStats] = useState<GameStats>(DEFAULT_STATS);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [showWorkshop, setShowWorkshop] = useState(false);
+  const [adjustedFinalStats, setAdjustedFinalStats] = useState<GameStats>(DEFAULT_STATS);
+  const [earnedCoins, setEarnedCoins] = useState(0);
+
+  const workshop = useWorkshop();
 
   const handleStatsUpdate = useCallback((newStats: GameStats) => {
     setStats(newStats);
@@ -38,8 +46,21 @@ function App() {
 
   const handleGameOver = useCallback((gameOverStats: GameStats) => {
     setFinalStats(gameOverStats);
+
+    const adjustedScore = workshop.calculateFinalScore(gameOverStats.score);
+    const coins = workshop.calculateCoinsEarned(gameOverStats.score);
+
+    setAdjustedFinalStats({
+      ...gameOverStats,
+      score: adjustedScore,
+      distance: gameOverStats.distance + gameOverStats.distance * workshop.state.distanceBonus / 100,
+      maxHeight: gameOverStats.maxHeight + gameOverStats.maxHeight * workshop.state.heightBonus / 100,
+    });
+    setEarnedCoins(coins);
+
+    workshop.addCoins(coins);
     setGameState('gameover');
-  }, []);
+  }, [workshop]);
 
   useEffect(() => {
     if (!containerRef.current || isInitialized) return;
@@ -100,6 +121,19 @@ function App() {
     setGameState('menu');
   };
 
+  const handleOpenWorkshop = () => {
+    setShowWorkshop(true);
+  };
+
+  const handleCloseWorkshop = () => {
+    setShowWorkshop(false);
+  };
+
+  const handleStartFromWorkshop = () => {
+    setShowWorkshop(false);
+    gameEngineRef.current?.restart();
+  };
+
   return (
     <div className="game-wrapper">
       <div
@@ -108,7 +142,9 @@ function App() {
         className="game-container"
       />
 
-      {gameState === 'menu' && <MainMenu onStart={handleStart} />}
+      {gameState === 'menu' && (
+        <MainMenu onStart={handleStart} onWorkshop={handleOpenWorkshop} />
+      )}
 
       {gameState === 'playing' && (
         <GameHUD stats={stats} onPause={handlePause} />
@@ -124,9 +160,20 @@ function App() {
 
       {gameState === 'gameover' && (
         <GameOverScreen
-          stats={finalStats}
+          stats={adjustedFinalStats}
+          baseStats={finalStats}
+          earnedCoins={earnedCoins}
+          scoreBonus={workshop.state.totalScoreBonus}
           onRestart={handleRestart}
           onMainMenu={handleMainMenu}
+          onWorkshop={handleOpenWorkshop}
+        />
+      )}
+
+      {showWorkshop && (
+        <Workshop
+          onClose={handleCloseWorkshop}
+          onStartGame={handleStartFromWorkshop}
         />
       )}
     </div>

@@ -2,9 +2,10 @@ import React from 'react';
 
 interface MainMenuProps {
   onStart: () => void;
+  onWorkshop: () => void;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop }) => {
   return (
     <div className="menu-overlay">
       <div className="menu-content">
@@ -90,6 +91,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
         <button className="start-button" onClick={onStart}>
           <span className="button-text">开始游戏</span>
           <span className="button-icon">▶</span>
+        </button>
+
+        <button className="workshop-menu-button" onClick={onWorkshop}>
+          <span className="button-icon">🛠️</span>
+          <span className="button-text">风筝改装工坊</span>
         </button>
 
         <div className="tips">

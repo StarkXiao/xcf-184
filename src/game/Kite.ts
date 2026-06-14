@@ -169,7 +169,7 @@ export class Kite {
     const acceleration = new THREE.Vector3(
       input.x * this.config.kiteSpeed * stabilityFactor * trackingBoost,
       input.y * this.config.kiteSpeed * 0.8 * stabilityFactor,
-      input.z * this.config.kiteSpeed * stabilityFactor * trackingBoost
+      -input.z * this.config.kiteSpeed * stabilityFactor * trackingBoost
     );
 
     this.velocity.add(acceleration.multiplyScalar(delta));

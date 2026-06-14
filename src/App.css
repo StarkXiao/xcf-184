@@ -521,15 +521,35 @@
   font-family: monospace;
 }
 
+.info-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 6px 0;
+}
+
+.info-row-highlight {
+  padding-top: 8px;
+}
+
+.info-value-gold {
+  color: #ffd700;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+}
+
 .hud-bottom {
   position: absolute;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
 }
 
-.shadow-indicator {
+.shadow-indicator,
+.stability-indicator {
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -537,6 +557,14 @@
   padding: 10px 20px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   text-align: center;
+  min-width: 320px;
+}
+
+.indicator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
 }
 
 .indicator-label {
@@ -544,17 +572,37 @@
   text-transform: uppercase;
   letter-spacing: 1px;
   color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 6px;
   display: block;
 }
 
+.indicator-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  font-family: monospace;
+}
+
 .indicator-bar {
-  width: 200px;
-  height: 6px;
+  width: 100%;
+  height: 8px;
   background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
   position: relative;
+}
+
+.indicator-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.stability-fill {
+  box-shadow: 0 0 12px currentColor;
 }
 
 .indicator-glow {
@@ -703,4 +751,94 @@
   .final-score-value {
     font-size: 44px;
   }
+}
+
+.workshop-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #4ecdc4 0%, #3db8b0 100%);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 6px 20px rgba(78, 205, 196, 0.3);
+  margin-top: 12px;
+}
+
+.workshop-menu-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(78, 205, 196, 0.4);
+}
+
+.workshop-menu-button:active {
+  transform: translateY(0);
+}
+
+.score-bonus-info {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.bonus-prefix {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.bonus-add {
+  color: #ffd700;
+  font-weight: 600;
+}
+
+.coins-earned {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 140, 0, 0.1));
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  animation: coinPop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes coinPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.coins-earned .coins-icon {
+  font-size: 24px;
+}
+
+.coins-earned .coins-text {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffd700;
+}
+
+.gameover-buttons .workshop-btn {
+  background: linear-gradient(135deg, rgba(78, 205, 196, 0.2), rgba(78, 205, 196, 0.1));
+  border: 1px solid rgba(78, 205, 196, 0.4);
+  color: #4ecdc4;
+}
+
+.gameover-buttons .workshop-btn:hover {
+  background: linear-gradient(135deg, rgba(78, 205, 196, 0.3), rgba(78, 205, 196, 0.2));
 }

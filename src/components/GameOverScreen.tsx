@@ -3,14 +3,22 @@ import type { GameStats } from '../game/types';
 
 interface GameOverScreenProps {
   stats: GameStats;
+  baseStats?: GameStats;
+  earnedCoins?: number;
+  scoreBonus?: number;
   onRestart: () => void;
   onMainMenu: () => void;
+  onWorkshop?: () => void;
 }
 
 export const GameOverScreen: React.FC<GameOverScreenProps> = ({
   stats,
+  baseStats,
+  earnedCoins = 0,
+  scoreBonus = 0,
   onRestart,
   onMainMenu,
+  onWorkshop,
 }) => {
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -55,7 +63,20 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
           <div className="final-score-value" style={{ color }}>
             {stats.score.toLocaleString()}
           </div>
+          {baseStats && scoreBonus > 0 && (
+            <div className="score-bonus-info">
+              <span className="bonus-prefix">基础分 {baseStats.score.toLocaleString()}</span>
+              <span className="bonus-add">+{scoreBonus}% 改装加成</span>
+            </div>
+          )}
         </div>
+
+        {earnedCoins > 0 && (
+          <div className="coins-earned">
+            <span className="coins-icon">🪙</span>
+            <span className="coins-text">获得 {earnedCoins.toLocaleString()} 金币</span>
+          </div>
+        )}
 
         <div className="stats-grid">
           <div className="stat-item">
@@ -95,6 +116,11 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
           <button className="menu-button primary" onClick={onRestart}>
             再来一次
           </button>
+          {onWorkshop && (
+            <button className="menu-button workshop-btn" onClick={onWorkshop}>
+              🛠️ 前往工坊
+            </button>
+          )}
           <button className="menu-button" onClick={onMainMenu}>
             返回主菜单
           </button>
