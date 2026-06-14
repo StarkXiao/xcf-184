@@ -242,11 +242,14 @@ export class WeatherSystem {
     return new THREE.Vector3(force.x, force.y, force.z);
   }
 
-  public setTimeOfDay(time: number): void {
-    if (this.config.timeOfDayFrozen) return;
+  public setTimeOfDay(time: number, force: boolean = false): void {
+    if (this.config.timeOfDayFrozen && !force) return;
 
     this.config.timeOfDay = ((time % 1) + 1) % 1;
+    this.updateCloudColors();
+  }
 
+  private updateCloudColors(): void {
     const isNight =
       this.config.timeOfDay < 0.2 || this.config.timeOfDay > 0.9;
 
@@ -369,5 +372,6 @@ export class WeatherSystem {
 
     this.clear();
     this.initClouds();
+    this.updateCloudColors();
   }
 }

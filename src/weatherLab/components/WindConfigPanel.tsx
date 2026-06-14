@@ -28,13 +28,14 @@ interface ConfigSliderProps {
   max: number;
   step: number;
   unit?: string;
+  disabled?: boolean;
   onChange: (value: number) => void;
 }
 
 const ConfigSlider: React.FC<ConfigSliderProps> = ({
-  label, value, min, max, step, unit = '', onChange
+  label, value, min, max, step, unit = '', disabled = false, onChange
 }) => (
-  <div className="config-slider">
+  <div className={`config-slider ${disabled ? 'disabled' : ''}`}>
     <div className="config-slider-header">
       <span className="config-slider-label">{label}</span>
       <span className="config-slider-value">{value.toFixed(step < 1 ? 2 : 0)}{unit}</span>
@@ -47,6 +48,7 @@ const ConfigSlider: React.FC<ConfigSliderProps> = ({
       value={value}
       onChange={(e) => onChange(parseFloat(e.target.value))}
       className="config-slider-input"
+      disabled={disabled}
     />
     <div className="config-slider-scale">
       <span>{min}{unit}</span>
@@ -125,7 +127,7 @@ export const WindConfigPanel: React.FC<WindConfigPanelProps> = ({
     return 'extreme';
   }, [windField]);
 
-  const handleWindFieldChange = (key: keyof WindFieldConfig, value: number | { x: number; y: number; z: number }) => {
+  const handleWindFieldChange = (key: keyof WindFieldConfig, value: number | boolean | { x: number; y: number; z: number }) => {
     setWindField((prev) => ({ ...prev, [key]: value }));
     if (currentScene) {
       onUpdateScene(currentScene.id, {
@@ -134,7 +136,7 @@ export const WindConfigPanel: React.FC<WindConfigPanelProps> = ({
     }
   };
 
-  const handleWeatherConfigChange = (key: keyof WeatherConfig, value: number | { x: number; y: number; z: number }) => {
+  const handleWeatherConfigChange = (key: keyof WeatherConfig, value: number | boolean | { x: number; y: number; z: number }) => {
     setWeatherConfig((prev: WeatherConfig) => ({ ...prev, [key]: value }));
     if (currentScene) {
       onUpdateScene(currentScene.id, {
@@ -282,8 +284,17 @@ export const WindConfigPanel: React.FC<WindConfigPanelProps> = ({
                   });
                 }}
                 className="config-slider-input"
+                disabled={windField.windDirectionLocked}
               />
             </div>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={windField.windDirectionLocked}
+                onChange={(e) => handleWindFieldChange('windDirectionLocked', e.target.checked)}
+              />
+              锁定风向（场景复现更稳定）
+            </label>
           </div>
         </div>
 
@@ -347,7 +358,17 @@ export const WindConfigPanel: React.FC<WindConfigPanelProps> = ({
             max={1}
             step={0.05}
             onChange={(v) => handleWeatherConfigChange('timeOfDay', v)}
+            disabled={weatherConfig.timeOfDayFrozen}
           />
+
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={weatherConfig.timeOfDayFrozen}
+              onChange={(e) => handleWeatherConfigChange('timeOfDayFrozen', e.target.checked)}
+            />
+            固定时间（禁用昼夜循环）
+          </label>
 
           <ConfigSlider
             label="湍流等级"

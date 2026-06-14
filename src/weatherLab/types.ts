@@ -53,6 +53,8 @@ export interface FlightDataPoint {
   rotation: Vector3;
   windForce: Vector3;
   airCurrentForce: Vector3;
+  windSpeed?: number;
+  altitude?: number;
   stability: number;
   shadowTracking: number;
 }
