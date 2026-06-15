@@ -33,6 +33,7 @@ export class StageTaskEngine {
   private currentStabilityHigh: boolean = false;
   private completedTaskIds: Set<string> = new Set();
   private lastSettlement: StageSettlement | null = null;
+  private globalBestScore: number = 0;
 
   constructor(callbacks: StageTaskCallbacks = {}) {
     this.callbacks = callbacks;
@@ -85,7 +86,14 @@ export class StageTaskEngine {
   }
 
   public getBestScore(): number {
-    return this.stages.reduce((max, s) => Math.max(max, s.bestScore), 0);
+    const stageBest = this.stages.reduce((max, s) => Math.max(max, s.bestScore), 0);
+    return Math.max(stageBest, this.globalBestScore);
+  }
+
+  public updateGlobalBestScore(score: number): void {
+    if (score > this.globalBestScore) {
+      this.globalBestScore = score;
+    }
   }
 
   public getUnlockedDifficulties(): ('easy' | 'normal' | 'hard' | 'extreme')[] {

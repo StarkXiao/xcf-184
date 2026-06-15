@@ -65,6 +65,10 @@ export function useStageTask() {
     return engineRef.current.getChapterUnlockDescription(chapter);
   }, []);
 
+  const updateGlobalBestScore = useCallback((score: number): void => {
+    engineRef.current.updateGlobalBestScore(score);
+  }, []);
+
   const getCurrentStage = useCallback((): Stage | null => {
     return engineRef.current.getCurrentStage();
   }, []);
@@ -121,6 +125,7 @@ export function useStageTask() {
     isDifficultyUnlocked,
     checkChapterUnlocks,
     getChapterUnlockDescription,
+    updateGlobalBestScore,
     getCurrentStage,
     getProgress,
     getCurrentTasks,

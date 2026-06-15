@@ -143,6 +143,10 @@ export function useJourney(autoRefresh = true) {
     return journeyEngine.getGrowthHistoryLastNDays(days);
   }, []);
 
+  const getBestScore = useCallback((): number => {
+    return journeyEngine.getBestScore();
+  }, []);
+
   return {
     state,
     recordFlight,
@@ -161,6 +165,7 @@ export function useJourney(autoRefresh = true) {
     getFlightRecordsByMode,
     getAnomaliesBySeverity,
     getGrowthHistoryLastNDays,
+    getBestScore,
     refreshState,
   };
 }

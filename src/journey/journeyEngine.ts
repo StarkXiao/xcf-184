@@ -582,6 +582,13 @@ export class JourneyEngine {
   public getGrowthHistoryLastNDays(days: number): GrowthDataPoint[] {
     return this.state.growthHistory.slice(-days);
   }
+
+  public getBestScore(): number {
+    if (this.state.flightRecords.length === 0) return 0;
+    return this.state.flightRecords.reduce(
+      (max, r) => Math.max(max, r.adjustedScore), 0
+    );
+  }
 }
 
 export const journeyEngine = new JourneyEngine();

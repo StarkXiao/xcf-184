@@ -42,7 +42,6 @@ import {
   stageTaskStateEmitter,
 } from './stageTask';
 import type { StageTask, StageProgress, StageSettlement } from './stageTask/types';
-import type { Chapter } from './stageTask/types';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
@@ -527,8 +526,12 @@ function App() {
       }
     }
 
+    stageTask.updateGlobalBestScore(journey.getBestScore());
+    stageTask.checkChapterUnlocks();
+    stageTaskStateEmitter.emit();
+
     setGameState('gameover');
-  }, [workshop, journey]);
+  }, [workshop, journey, stageTask]);
 
   useEffect(() => {
     if (!containerRef.current || isInitialized) return;
@@ -567,6 +570,15 @@ function App() {
       gameEngineRef.current.setFlightParams(workshop.flightParams);
     }
   }, [workshop.flightParams, isInitialized]);
+
+  useEffect(() => {
+    const bestScore = journey.getBestScore();
+    if (bestScore > 0) {
+      stageTask.updateGlobalBestScore(bestScore);
+      stageTask.checkChapterUnlocks();
+      stageTaskStateEmitter.emit();
+    }
+  }, [journey, stageTask]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
