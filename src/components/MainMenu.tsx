@@ -11,9 +11,10 @@ interface MainMenuProps {
   onFestival: () => void;
   onMapExplore: () => void;
   onReplay: () => void;
+  onStageChallenge: () => void;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop, onTournament, onTraining, onWeatherLab, onLevelEditor, onJourney, onFestival, onMapExplore, onReplay }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop, onTournament, onTraining, onWeatherLab, onLevelEditor, onJourney, onFestival, onMapExplore, onReplay, onStageChallenge }) => {
   return (
     <div className="menu-overlay">
       <div className="menu-content">
@@ -144,6 +145,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onWorkshop, onTourn
         <button className="tournament-menu-button" onClick={onReplay} style={{ background: 'linear-gradient(135deg, #0891b2, #0e7490)' }}>
           <span className="button-icon">🎮</span>
           <span className="button-text">观战与回放中心</span>
+        </button>
+
+        <button className="tournament-menu-button" onClick={onStageChallenge} style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}>
+          <span className="button-icon">🏁</span>
+          <span className="button-text">赛段挑战</span>
         </button>
 
         <div className="tips">

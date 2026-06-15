@@ -18,11 +18,16 @@ import {
   DEFAULT_GAME_CONFIG,
 } from './types';
 import type { LevelScene, EditorBuilding, EditorAirCurrent } from '../levelEditor/types';
+import type { StageTaskEngine } from '../stageTask/stageTaskEngine';
+import type { StageSettlement, StageProgress, Announcement, StageTask } from '../stageTask/types';
 
 export interface GameEngineCallbacks {
   onStatsUpdate: (stats: GameStats) => void;
   onStateChange: (state: GameState) => void;
   onGameOver: (finalStats: GameStats) => void;
+  onStageTaskUpdate?: (tasks: StageTask[], progress: StageProgress) => void;
+  onStageComplete?: (settlement: StageSettlement) => void;
+  onStageAnnouncement?: (announcement: Announcement) => void;
 }
 
 export class GameEngine {
@@ -50,6 +55,8 @@ export class GameEngine {
   private shadowTrackingAccumulator = 0;
   private shadowTrackingSamples = 0;
   private currentLevel: LevelScene | null = null;
+  private stageTaskEngine: StageTaskEngine | null = null;
+  private lastAirCurrentFrameCount = 0;
 
   constructor(
     container: HTMLElement,
@@ -172,6 +179,7 @@ export class GameEngine {
     this.collisions = 0;
     this.shadowTrackingAccumulator = 0;
     this.shadowTrackingSamples = 0;
+    this.lastAirCurrentFrameCount = 0;
     this.startTime = performance.now();
     this.lastTime = performance.now();
 
@@ -254,6 +262,11 @@ export class GameEngine {
     if (Math.abs(airForce.x) + Math.abs(airForce.y) + Math.abs(airForce.z) > 0.01) {
       this.kite.applyAirCurrent(airForce, this.stats.shadowTracking, this.stats.flightStability);
       this.stats.airCurrentCount++;
+      
+      if (this.stageTaskEngine && this.stats.airCurrentCount > this.lastAirCurrentFrameCount) {
+        this.stageTaskEngine.notifyAirCurrentCaught();
+        this.lastAirCurrentFrameCount = this.stats.airCurrentCount;
+      }
     }
 
     const collision = this.collisionSystem.checkKiteCollision(this.kite.group.position);
@@ -317,6 +330,18 @@ export class GameEngine {
 
     this.sceneManager.updateCamera(this.kite.group.position);
     this.callbacks.onStatsUpdate(this.stats);
+
+    if (this.stageTaskEngine && this.state === 'playing') {
+      const currentTime = performance.now();
+      this.stageTaskEngine.update(this.stats, delta, currentTime);
+      
+      if (this.callbacks.onStageTaskUpdate) {
+        this.callbacks.onStageTaskUpdate(
+          this.stageTaskEngine.getCurrentTasks(),
+          this.stageTaskEngine.getProgress()
+        );
+      }
+    }
   }
 
   private endGame(): void {
@@ -453,6 +478,26 @@ export class GameEngine {
       turbulenceLevel: level.globalSettings.turbulence,
       ...level.weatherConfig,
     });
+  }
+
+  public setStageTaskEngine(engine: StageTaskEngine | null): void {
+    this.stageTaskEngine = engine;
+  }
+
+  public getStageTasks(): StageTask[] {
+    return this.stageTaskEngine?.getCurrentTasks() ?? [];
+  }
+
+  public getStageProgress(): StageProgress | null {
+    return this.stageTaskEngine?.getProgress() ?? null;
+  }
+
+  public getStageSettlement(): StageSettlement | null {
+    return this.stageTaskEngine?.getStageSettlement() ?? null;
+  }
+
+  public getAnnouncements(): Announcement[] {
+    return this.stageTaskEngine?.getAnnouncements() ?? [];
   }
 
   public clearLevelScene(): void {

@@ -32,6 +32,16 @@ import { mapExploreStateEmitter } from './mapExplore/useMapExplore';
 import { ReplayCenter } from './replay';
 import { replayEngine } from './replay/replayEngine';
 import type { FlightRecord } from './journey/types';
+import {
+  StageSelect,
+  StageTaskHUD,
+  SceneAnnouncer,
+  StageSettlementScreen,
+  PauseSettlement,
+  useStageTask,
+  stageTaskStateEmitter,
+} from './stageTask';
+import type { StageTask, StageProgress, StageSettlement } from './stageTask/types';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
@@ -42,6 +52,7 @@ import './journey/journey.css';
 import './festival/festival.css';
 import './mapExplore/mapExplore.css';
 import './replay/replay.css';
+import './stageTask/stageTask.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -84,13 +95,20 @@ function App() {
   const [showMapExplore, setShowMapExplore] = useState(false);
   const [mapExploreRegionId, setMapExploreRegionId] = useState<string | null>(null);
   const [showReplay, setShowReplay] = useState(false);
+  const [showStageSelect, setShowStageSelect] = useState(false);
+  const [stageTasks, setStageTasks] = useState<StageTask[]>([]);
+  const [stageProgress, setStageProgress] = useState<StageProgress | null>(null);
+  const [stageSettlement, setStageSettlement] = useState<StageSettlement | null>(null);
+  const [showStageSettlement, setShowStageSettlement] = useState(false);
   const [, setForceUpdate] = useState(0);
   const flightDataPointsRef = useRef<FlightDataPoint[]>([]);
   const flightDataLastSaveTimeRef = useRef<number>(0);
   const levelEditorLevelIdRef = useRef<string | null>(null);
+  const stageIdRef = useRef<string | null>(null);
 
   const workshop = useWorkshop();
   const journey = useJourney();
+  const stageTask = useStageTask();
 
   const tournamentTrackIdRef = useRef<string | null>(null);
   const trainingLessonIdRef = useRef<string | null>(null);
@@ -184,6 +202,25 @@ function App() {
     gameStateRef.current = state;
     setGameState(state);
   }, []);
+
+  const handleStageTaskUpdate = useCallback((tasks: StageTask[], progress: StageProgress) => {
+    setStageTasks(tasks);
+    setStageProgress(progress);
+    stageTaskStateEmitter.emit();
+  }, []);
+
+  const handleStageComplete = useCallback((settlement: StageSettlement) => {
+    setStageSettlement(settlement);
+    setShowStageSettlement(true);
+    
+    const earnedCoinsFromStage = settlement.earnedCoins;
+    if (earnedCoinsFromStage > 0) {
+      workshop.addCoins(earnedCoinsFromStage);
+      setEarnedCoins(prev => prev + earnedCoinsFromStage);
+    }
+    
+    stageTaskStateEmitter.emit();
+  }, [workshop]);
 
   const handleGameOver = useCallback((gameOverStats: GameStats) => {
     setFinalStats(gameOverStats);
@@ -440,11 +477,14 @@ function App() {
         onStatsUpdate: handleStatsUpdate,
         onStateChange: handleStateChange,
         onGameOver: handleGameOver,
+        onStageTaskUpdate: handleStageTaskUpdate,
+        onStageComplete: handleStageComplete,
       },
       initialConfig
     );
 
     engine.init();
+    engine.setStageTaskEngine(stageTask.engine);
     gameEngineRef.current = engine;
     setIsInitialized(true);
 
@@ -521,6 +561,13 @@ function App() {
       festivalEngine.selectScene(currentFestivalSceneId);
       festivalStateEmitter.emit();
     }
+    const currentStageId = stageIdRef.current;
+    if (currentStageId) {
+      const stage = stageTask.getStages().find(s => s.id === currentStageId);
+      if (stage) {
+        stageTask.startStage(currentStageId);
+      }
+    }
     lastScoreUpdateRef.current = 0;
     flightDataPointsRef.current = [];
     flightDataLastSaveTimeRef.current = 0;
@@ -556,8 +603,87 @@ function App() {
       setMapExploreRegionId(null);
       mapExploreStateEmitter.emit();
     }
+    if (stageIdRef.current) {
+      stageIdRef.current = null;
+      stageTask.reset();
+      setStageTasks([]);
+      setStageProgress(null);
+      setStageSettlement(null);
+      setShowStageSettlement(false);
+      stageTaskStateEmitter.emit();
+    }
     gameEngineRef.current?.clearLevelScene();
     setGameState('menu');
+  };
+
+  const handleOpenStageSelect = () => {
+    setShowStageSelect(true);
+  };
+
+  const handleCloseStageSelect = () => {
+    setShowStageSelect(false);
+  };
+
+  const handleStartStage = (stageId: string) => {
+    const stage = stageTask.getStages().find(s => s.id === stageId);
+    if (!stage) return;
+
+    const weatherConfig = stageTask.getWeatherConfigOverride(stage);
+    const airCurrentConfig = stageTask.getAirCurrentConfigOverride(stage);
+
+    stageIdRef.current = stageId;
+    stageTask.startStage(stageId);
+    setShowStageSelect(false);
+    setShowStageSettlement(false);
+    setStageSettlement(null);
+    lastScoreUpdateRef.current = 0;
+    flightDataPointsRef.current = [];
+    flightDataLastSaveTimeRef.current = 0;
+    stageTaskStateEmitter.emit();
+
+    if (gameEngineRef.current) {
+      gameEngineRef.current.reconfigure({
+        ...airCurrentConfig,
+        weatherConfig,
+      });
+
+      const gravity = 0.015;
+      const turbulence = weatherConfig.turbulenceLevel ?? 0.2;
+      gameEngineRef.current.setFlightParams({
+        ...workshop.flightParams,
+        maxSpeed: workshop.flightParams.maxSpeed * (1 / (1 + gravity)),
+        stabilityFactor: workshop.flightParams.stabilityFactor * (1 - turbulence * 0.3),
+      });
+
+      gameEngineRef.current.restart();
+    }
+  };
+
+  const handleQuitStage = () => {
+    if (stageIdRef.current) {
+      stageIdRef.current = null;
+      stageTask.reset();
+      setStageTasks([]);
+      setStageProgress(null);
+      setStageSettlement(null);
+      setShowStageSettlement(false);
+      stageTaskStateEmitter.emit();
+    }
+    setGameState('menu');
+  };
+
+  const handleNextStage = () => {
+    if (!stageSettlement) return;
+    
+    const stages = stageTask.getStages();
+    const currentIndex = stages.findIndex(s => s.id === stageSettlement.stageId);
+    
+    if (currentIndex >= 0 && currentIndex + 1 < stages.length) {
+      const nextStage = stages[currentIndex + 1];
+      if (nextStage.unlocked) {
+        handleStartStage(nextStage.id);
+      }
+    }
   };
 
   const handleOpenLevelEditor = () => {
@@ -866,19 +992,47 @@ function App() {
           onFestival={handleOpenFestival}
           onMapExplore={handleOpenMapExplore}
           onReplay={handleOpenReplay}
+          onStageChallenge={handleOpenStageSelect}
         />
       )}
 
       {gameState === 'playing' && (
-        <GameHUD stats={stats} onPause={handlePause} />
+        <>
+          <GameHUD stats={stats} onPause={handlePause} />
+          {stageIdRef.current && (
+            <StageTaskHUD
+              currentStage={stageTask.getCurrentStage()}
+              progress={stageProgress || stageTask.getProgress()}
+              tasks={stageTasks.length > 0 ? stageTasks : stageTask.getCurrentTasks()}
+            />
+          )}
+          {stageIdRef.current && (
+            <SceneAnnouncer
+              announcements={stageTask.getAnnouncements()}
+            />
+          )}
+        </>
       )}
 
       {gameState === 'paused' && (
-        <PauseMenu
-          onResume={handleResume}
-          onRestart={handleRestart}
-          onMainMenu={handleMainMenu}
-        />
+        <>
+          {stageIdRef.current && stageProgress ? (
+            <PauseSettlement
+              currentStage={stageTask.getCurrentStage()}
+              progress={stageProgress}
+              tasks={stageTasks}
+              onResume={handleResume}
+              onRestart={handleRestart}
+              onQuit={handleQuitStage}
+            />
+          ) : (
+            <PauseMenu
+              onResume={handleResume}
+              onRestart={handleRestart}
+              onMainMenu={handleMainMenu}
+            />
+          )}
+        </>
       )}
 
       {gameState === 'gameover' && (
@@ -977,6 +1131,28 @@ function App() {
         <ReplayCenter
           onClose={handleCloseReplay}
           flightRecords={journey.getFlightRecordsByMode()}
+        />
+      )}
+
+      {showStageSelect && (
+        <StageSelect
+          stages={stageTask.getStages()}
+          onSelectStage={handleStartStage}
+          onClose={handleCloseStageSelect}
+        />
+      )}
+
+      {showStageSettlement && stageSettlement && (
+        <StageSettlementScreen
+          settlement={stageSettlement}
+          tasks={stageTasks}
+          onRestart={() => handleStartStage(stageSettlement.stageId)}
+          onNextStage={handleNextStage}
+          onMainMenu={handleQuitStage}
+          hasNextStage={
+            stageSettlement.stars > 0 &&
+            stageTask.getStages().findIndex(s => s.id === stageSettlement.stageId) < stageTask.getStages().length - 1
+          }
         />
       )}
     </div>
