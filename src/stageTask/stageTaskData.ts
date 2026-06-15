@@ -1,4 +1,4 @@
-import type { Stage, StageTask, TaskDifficulty } from './types';
+import type { Stage, StageTask, TaskDifficulty, Chapter } from './types';
 
 const createTask = (
   id: string,
@@ -25,12 +25,84 @@ const createTask = (
   timeLimit,
 });
 
+export const CHAPTERS: Chapter[] = [
+  {
+    id: 'chapter-1',
+    name: '云端启程',
+    subtitle: '初识天空',
+    description: '从零开始，学习风筝飞行的基础技巧。在晴朗的天空下感受风的韵律。',
+    chapterNumber: 1,
+    stageIds: ['stage-1', 'stage-2'],
+    unlockCondition: { type: 'always' },
+    unlocked: true,
+    completed: false,
+    totalStars: 0,
+    maxStars: 6,
+    unlockedDifficulties: ['easy', 'normal'],
+    themeColor: '#4ecdc4',
+    themeGradient: 'linear-gradient(135deg, #4ecdc4, #44a08d)',
+    icon: '🌤️',
+  },
+  {
+    id: 'chapter-2',
+    name: '风之试炼',
+    subtitle: '驾驭狂风',
+    description: '风暴来袭，真正的考验开始了。在剧烈的气流中证明你的飞行实力。',
+    chapterNumber: 2,
+    stageIds: ['stage-3'],
+    unlockCondition: { type: 'chapter_complete', chapterId: 'chapter-1', minStars: 4 },
+    unlocked: false,
+    completed: false,
+    totalStars: 0,
+    maxStars: 3,
+    unlockedDifficulties: ['easy', 'normal', 'hard'],
+    themeColor: '#667eea',
+    themeGradient: 'linear-gradient(135deg, #667eea, #764ba2)',
+    icon: '🌬️',
+  },
+  {
+    id: 'chapter-3',
+    name: '暗夜征途',
+    subtitle: '月下翱翔',
+    description: '夜幕降临，星辰指引方向。在黑暗中磨砺你的直觉与技巧。',
+    chapterNumber: 3,
+    stageIds: ['stage-4'],
+    unlockCondition: { type: 'chapter_complete', chapterId: 'chapter-2', minStars: 2 },
+    unlocked: false,
+    completed: false,
+    totalStars: 0,
+    maxStars: 3,
+    unlockedDifficulties: ['easy', 'normal', 'hard'],
+    themeColor: '#6366f1',
+    themeGradient: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    icon: '🌙',
+  },
+  {
+    id: 'chapter-4',
+    name: '传说纪元',
+    subtitle: '至高荣耀',
+    description: '传说之巅，雷电交加。唯有最顶尖的风筝大师才能抵达此处。',
+    chapterNumber: 4,
+    stageIds: ['stage-5'],
+    unlockCondition: { type: 'total_stars', count: 8 },
+    unlocked: false,
+    completed: false,
+    totalStars: 0,
+    maxStars: 3,
+    unlockedDifficulties: ['easy', 'normal', 'hard', 'extreme'],
+    themeColor: '#f59e0b',
+    themeGradient: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+    icon: '⚡',
+  },
+];
+
 export const STAGES: Stage[] = [
   {
     id: 'stage-1',
     name: '初入云际',
     description: '新手训练赛段，掌握基本飞行技巧',
     stageNumber: 1,
+    chapterId: 'chapter-1',
     tasks: [
       createTask('s1-t1', '起步飞行', '飞行距离达到 500 米', 'distanceTarget', 500, 'easy', 200, 10),
       createTask('s1-t2', '爬升挑战', '达到 100 米高度', 'heightTarget', 100, 'easy', 300, 15),
@@ -51,6 +123,7 @@ export const STAGES: Stage[] = [
     name: '追风少年',
     description: '中级赛段，学习利用气流',
     stageNumber: 2,
+    chapterId: 'chapter-1',
     tasks: [
       createTask('s2-t1', '远走高飞', '飞行距离达到 1500 米', 'distanceTarget', 1500, 'medium', 500, 25),
       createTask('s2-t2', '云层之上', '达到 180 米高度', 'heightTarget', 180, 'medium', 600, 30),
@@ -72,6 +145,7 @@ export const STAGES: Stage[] = [
     name: '风暴追逐者',
     description: '高级赛段，挑战狂风骤雨',
     stageNumber: 3,
+    chapterId: 'chapter-2',
     tasks: [
       createTask('s3-t1', '疾风飞行', '飞行距离达到 3000 米', 'distanceTarget', 3000, 'hard', 1000, 50),
       createTask('s3-t2', '冲上云霄', '达到 250 米高度', 'heightTarget', 250, 'hard', 1200, 60),
@@ -95,6 +169,7 @@ export const STAGES: Stage[] = [
     name: '暗夜翱翔',
     description: '极限赛段，在夜空中挑战自我',
     stageNumber: 4,
+    chapterId: 'chapter-3',
     tasks: [
       createTask('s4-t1', '暗夜长征', '飞行距离达到 5000 米', 'distanceTarget', 5000, 'extreme', 2000, 100),
       createTask('s4-t2', '星辰之顶', '达到 350 米高度', 'heightTarget', 350, 'extreme', 2500, 120),
@@ -119,6 +194,7 @@ export const STAGES: Stage[] = [
     name: '传说之巅',
     description: '传说级赛段，只有真正的大师才能完成',
     stageNumber: 5,
+    chapterId: 'chapter-4',
     tasks: [
       createTask('s5-t1', '万里鹏程', '飞行距离达到 8000 米', 'distanceTarget', 8000, 'extreme', 4000, 200),
       createTask('s5-t2', '九天揽月', '达到 500 米高度', 'heightTarget', 500, 'extreme', 5000, 250),
@@ -146,4 +222,12 @@ export const getStageById = (id: string): Stage | undefined => {
 
 export const getStages = (): Stage[] => {
   return [...STAGES];
+};
+
+export const getChapterById = (id: string): Chapter | undefined => {
+  return CHAPTERS.find(c => c.id === id);
+};
+
+export const getChapters = (): Chapter[] => {
+  return JSON.parse(JSON.stringify(CHAPTERS));
 };

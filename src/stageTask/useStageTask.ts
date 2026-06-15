@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { StageTaskEngine } from './stageTaskEngine';
-import type { Stage, StageTask, StageProgress, Announcement, StageSettlement } from './types';
+import type { Stage, StageTask, StageProgress, Announcement, StageSettlement, Chapter } from './types';
 
 const stageTaskEngineRef = { current: new StageTaskEngine() };
 
@@ -27,6 +27,42 @@ export function useStageTask() {
 
   const getStages = useCallback((): Stage[] => {
     return engineRef.current.getStages();
+  }, []);
+
+  const getChapters = useCallback((): Chapter[] => {
+    return engineRef.current.getChapters();
+  }, []);
+
+  const getChapterById = useCallback((id: string): Chapter | undefined => {
+    return engineRef.current.getChapterById(id);
+  }, []);
+
+  const getStagesByChapter = useCallback((chapterId: string): Stage[] => {
+    return engineRef.current.getStagesByChapter(chapterId);
+  }, []);
+
+  const getTotalStars = useCallback((): number => {
+    return engineRef.current.getTotalStars();
+  }, []);
+
+  const getBestScore = useCallback((): number => {
+    return engineRef.current.getBestScore();
+  }, []);
+
+  const getUnlockedDifficulties = useCallback((): ('easy' | 'normal' | 'hard' | 'extreme')[] => {
+    return engineRef.current.getUnlockedDifficulties();
+  }, []);
+
+  const isDifficultyUnlocked = useCallback((difficulty: 'easy' | 'normal' | 'hard' | 'extreme'): boolean => {
+    return engineRef.current.isDifficultyUnlocked(difficulty);
+  }, []);
+
+  const checkChapterUnlocks = useCallback((): Chapter[] => {
+    return engineRef.current.checkChapterUnlocks();
+  }, []);
+
+  const getChapterUnlockDescription = useCallback((chapter: Chapter): string => {
+    return engineRef.current.getChapterUnlockDescription(chapter);
   }, []);
 
   const getCurrentStage = useCallback((): Stage | null => {
@@ -76,6 +112,15 @@ export function useStageTask() {
 
   return {
     getStages,
+    getChapters,
+    getChapterById,
+    getStagesByChapter,
+    getTotalStars,
+    getBestScore,
+    getUnlockedDifficulties,
+    isDifficultyUnlocked,
+    checkChapterUnlocks,
+    getChapterUnlockDescription,
     getCurrentStage,
     getProgress,
     getCurrentTasks,

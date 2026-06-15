@@ -42,6 +42,7 @@ import {
   stageTaskStateEmitter,
 } from './stageTask';
 import type { StageTask, StageProgress, StageSettlement } from './stageTask/types';
+import type { Chapter } from './stageTask/types';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
@@ -192,9 +193,18 @@ function App() {
     }
   }, [difficulty, isInitialized]);
 
+  useEffect(() => {
+    const unlockedDifficulties = stageTask.getUnlockedDifficulties();
+    if (!unlockedDifficulties.includes(difficulty)) {
+      const fallback = unlockedDifficulties[unlockedDifficulties.length - 1] || 'normal';
+      setDifficulty(fallback);
+    }
+  }, [stageTask, difficulty]);
+
   const handleDifficultyChange = useCallback((newDifficulty: 'easy' | 'normal' | 'hard' | 'extreme') => {
+    if (!stageTask.isDifficultyUnlocked(newDifficulty)) return;
     setDifficulty(newDifficulty);
-  }, []);
+  }, [stageTask]);
 
   const handleStatsUpdate = useCallback((newStats: GameStats) => {
     setStats(newStats);
@@ -1056,6 +1066,14 @@ function App() {
           onStageChallenge={handleOpenStageSelect}
           difficulty={difficulty}
           onDifficultyChange={handleDifficultyChange}
+          unlockedDifficulties={stageTask.getUnlockedDifficulties()}
+          chapterProgress={{
+            unlocked: stageTask.getChapters().filter(c => c.unlocked).length,
+            total: stageTask.getChapters().length,
+            totalStars: stageTask.getTotalStars(),
+            completedStages: stageTask.getStages().filter(s => s.completed).length,
+            totalStages: stageTask.getStages().length,
+          }}
         />
       )}
 
@@ -1213,8 +1231,10 @@ function App() {
       {showStageSelect && (
         <StageSelect
           stages={stageTask.getStages()}
+          chapters={stageTask.getChapters()}
           onSelectStage={handleStartStage}
           onClose={handleCloseStageSelect}
+          getChapterUnlockDescription={stageTask.getChapterUnlockDescription}
         />
       )}
 

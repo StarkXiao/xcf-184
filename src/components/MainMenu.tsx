@@ -14,6 +14,8 @@ interface MainMenuProps {
   onStageChallenge: () => void;
   difficulty: 'easy' | 'normal' | 'hard' | 'extreme';
   onDifficultyChange: (difficulty: 'easy' | 'normal' | 'hard' | 'extreme') => void;
+  unlockedDifficulties: ('easy' | 'normal' | 'hard' | 'extreme')[];
+  chapterProgress: { unlocked: number; total: number; totalStars: number; completedStages: number; totalStages: number };
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({ 
@@ -29,7 +31,9 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onReplay, 
   onStageChallenge,
   difficulty,
-  onDifficultyChange
+  onDifficultyChange,
+  unlockedDifficulties,
+  chapterProgress,
 }) => {
   const [showDifficultyInfo, setShowDifficultyInfo] = useState(false);
   
@@ -90,20 +94,24 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         <div className="difficulty-selector">
           <h3>难度选择</h3>
           <div className="difficulty-buttons">
-            {(['easy', 'normal', 'hard', 'extreme'] as const).map((d) => (
-              <button
-                key={d}
-                className={`difficulty-btn ${difficulty === d ? 'active' : ''}`}
-                style={{ 
-                  borderColor: difficultyInfo[d].color,
-                  color: difficulty === d ? '#fff' : difficultyInfo[d].color,
-                  background: difficulty === d ? difficultyInfo[d].color : 'transparent'
-                }}
-                onClick={() => onDifficultyChange(d)}
-              >
-                {difficultyInfo[d].label}
-              </button>
-            ))}
+            {(['easy', 'normal', 'hard', 'extreme'] as const).map((d) => {
+              const isUnlocked = unlockedDifficulties.includes(d);
+              return (
+                <button
+                  key={d}
+                  className={`difficulty-btn ${difficulty === d ? 'active' : ''} ${!isUnlocked ? 'locked' : ''}`}
+                  style={{ 
+                    borderColor: isUnlocked ? difficultyInfo[d].color : '#555',
+                    color: difficulty === d ? '#fff' : isUnlocked ? difficultyInfo[d].color : '#555',
+                    background: difficulty === d && isUnlocked ? difficultyInfo[d].color : 'transparent'
+                  }}
+                  onClick={() => isUnlocked && onDifficultyChange(d)}
+                  disabled={!isUnlocked}
+                >
+                  {isUnlocked ? difficultyInfo[d].label : '🔒'}
+                </button>
+              );
+            })}
           </div>
           <div 
             className="difficulty-desc"
@@ -111,6 +119,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           >
             {difficultyInfo[difficulty].desc}
           </div>
+          {!unlockedDifficulties.includes('hard') && (
+            <div className="difficulty-unlock-hint">
+              💡 通关更多章节以解锁更高难度
+            </div>
+          )}
           <button 
             className="difficulty-info-toggle"
             onClick={() => setShowDifficultyInfo(!showDifficultyInfo)}
@@ -244,8 +257,23 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
         <button className="tournament-menu-button" onClick={onStageChallenge} style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}>
           <span className="button-icon">🏁</span>
-          <span className="button-text">赛段挑战</span>
+          <span className="button-text">章节挑战</span>
         </button>
+
+        {chapterProgress.total > 0 && (
+          <div className="chapter-progress-bar-menu">
+            <div className="cpb-header">
+              <span className="cpb-label">📖 章节进度</span>
+              <span className="cpb-stats">{chapterProgress.unlocked}/{chapterProgress.total} 章 · ⭐ {chapterProgress.totalStars} · 🏆 {chapterProgress.completedStages}/{chapterProgress.totalStages}</span>
+            </div>
+            <div className="cpb-bar">
+              <div
+                className="cpb-fill"
+                style={{ width: `${(chapterProgress.completedStages / Math.max(chapterProgress.totalStages, 1)) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="tips">
           <p>💡 提示：蓝色光环是上升气流，紫色是乱流，橙色是下降气流</p>

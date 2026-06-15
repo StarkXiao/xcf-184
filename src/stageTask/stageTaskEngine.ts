@@ -4,8 +4,10 @@ import type {
   StageProgress,
   Announcement,
   StageSettlement,
+  Chapter,
+  ChapterUnlockCondition,
 } from './types';
-import { STAGES, getStageById } from './stageTaskData';
+import { STAGES, CHAPTERS, getStageById } from './stageTaskData';
 import type { GameStats } from '../game/types';
 
 export interface StageTaskCallbacks {
@@ -14,10 +16,12 @@ export interface StageTaskCallbacks {
   onStageStart?: (stage: Stage) => void;
   onAnnouncement?: (announcement: Announcement) => void;
   onStageFailed?: (reason: string) => void;
+  onChapterUnlock?: (chapter: Chapter) => void;
 }
 
 export class StageTaskEngine {
   private stages: Stage[] = [];
+  private chapters: Chapter[] = [];
   private currentStage: Stage | null = null;
   private progress: StageProgress;
   private callbacks: StageTaskCallbacks;
@@ -48,10 +52,153 @@ export class StageTaskEngine {
 
   private loadStages(): void {
     this.stages = JSON.parse(JSON.stringify(STAGES));
+    this.chapters = JSON.parse(JSON.stringify(CHAPTERS));
+    this.syncChapterData();
+  }
+
+  private syncChapterData(): void {
+    for (const chapter of this.chapters) {
+      const chapterStages = this.stages.filter(s => s.chapterId === chapter.id);
+      chapter.totalStars = chapterStages.reduce((sum, s) => sum + s.stars, 0);
+      chapter.completed = chapterStages.length > 0 && chapterStages.every(s => s.completed);
+    }
   }
 
   public getStages(): Stage[] {
     return [...this.stages];
+  }
+
+  public getChapters(): Chapter[] {
+    return this.chapters.map(c => ({ ...c }));
+  }
+
+  public getChapterById(id: string): Chapter | undefined {
+    return this.chapters.find(c => c.id === id);
+  }
+
+  public getStagesByChapter(chapterId: string): Stage[] {
+    return this.stages.filter(s => s.chapterId === chapterId);
+  }
+
+  public getTotalStars(): number {
+    return this.stages.reduce((sum, s) => sum + s.stars, 0);
+  }
+
+  public getBestScore(): number {
+    return this.stages.reduce((max, s) => Math.max(max, s.bestScore), 0);
+  }
+
+  public getUnlockedDifficulties(): ('easy' | 'normal' | 'hard' | 'extreme')[] {
+    const difficulties = new Set<'easy' | 'normal' | 'hard' | 'extreme'>();
+    for (const chapter of this.chapters) {
+      if (chapter.unlocked) {
+        for (const d of chapter.unlockedDifficulties) {
+          difficulties.add(d);
+        }
+      }
+    }
+    if (difficulties.size === 0) {
+      return ['easy', 'normal'];
+    }
+    return Array.from(difficulties).sort((a, b) => {
+      const order: Record<string, number> = { easy: 0, normal: 1, hard: 2, extreme: 3 };
+      return order[a] - order[b];
+    });
+  }
+
+  public isDifficultyUnlocked(difficulty: 'easy' | 'normal' | 'hard' | 'extreme'): boolean {
+    return this.getUnlockedDifficulties().includes(difficulty);
+  }
+
+  public checkChapterUnlocks(): Chapter[] {
+    const newlyUnlocked: Chapter[] = [];
+
+    for (const chapter of this.chapters) {
+      if (chapter.unlocked) continue;
+
+      if (this.evaluateUnlockCondition(chapter.unlockCondition)) {
+        chapter.unlocked = true;
+        newlyUnlocked.push({ ...chapter });
+
+        for (const stageId of chapter.stageIds) {
+          const stage = this.stages.find(s => s.id === stageId);
+          if (stage && !stage.unlocked) {
+            const prevStageId = chapter.stageIds.indexOf(stageId) > 0
+              ? chapter.stageIds[chapter.stageIds.indexOf(stageId) - 1]
+              : null;
+            if (!prevStageId) {
+              stage.unlocked = true;
+            }
+          }
+        }
+
+        if (chapter.stageIds.length > 0) {
+          const firstStage = this.stages.find(s => s.id === chapter.stageIds[0]);
+          if (firstStage) {
+            firstStage.unlocked = true;
+          }
+        }
+
+        if (this.callbacks.onChapterUnlock) {
+          this.callbacks.onChapterUnlock({ ...chapter });
+        }
+      }
+    }
+
+    return newlyUnlocked;
+  }
+
+  private evaluateUnlockCondition(condition: ChapterUnlockCondition): boolean {
+    switch (condition.type) {
+      case 'always':
+        return true;
+
+      case 'chapter_complete': {
+        const chapter = this.chapters.find(c => c.id === condition.chapterId);
+        if (!chapter) return false;
+        return chapter.completed && chapter.totalStars >= condition.minStars;
+      }
+
+      case 'total_stars':
+        return this.getTotalStars() >= condition.count;
+
+      case 'best_score':
+        return this.getBestScore() >= condition.minScore;
+
+      case 'difficulty_cleared': {
+        return this.isDifficultyUnlocked(condition.difficulty);
+      }
+
+      default:
+        return false;
+    }
+  }
+
+  public getChapterUnlockDescription(chapter: Chapter): string {
+    const cond = chapter.unlockCondition;
+    switch (cond.type) {
+      case 'always':
+        return '默认解锁';
+      case 'chapter_complete': {
+        const target = this.chapters.find(c => c.id === cond.chapterId);
+        const targetName = target ? target.name : cond.chapterId;
+        const chapterStages = this.stages.filter(s => s.chapterId === cond.chapterId);
+        const currentStars = chapterStages.reduce((sum, s) => sum + s.stars, 0);
+        return `通关「${targetName}」并获取 ${cond.minStars} 星（当前 ${currentStars}/${cond.minStars}）`;
+      }
+      case 'total_stars': {
+        const current = this.getTotalStars();
+        return `累计获得 ${cond.count} 颗星（当前 ${current}/${cond.count}）`;
+      }
+      case 'best_score': {
+        const current = this.getBestScore();
+        return `最高得分达到 ${cond.minScore}（当前 ${current}）`;
+      }
+      case 'difficulty_cleared':
+        return `在 ${cond.difficulty} 难度下通关`;
+      default:
+        return '未知条件';
+    }
   }
 
   public getCurrentStage(): Stage | null {
@@ -301,7 +448,28 @@ export class StageTaskEngine {
       );
 
       if (stageIndex + 1 < this.stages.length) {
-        this.stages[stageIndex + 1].unlocked = true;
+        const nextStage = this.stages[stageIndex + 1];
+        const currentChapter = this.chapters.find(c => c.id === this.currentStage!.chapterId);
+        if (currentChapter && currentChapter.stageIds.includes(nextStage.id)) {
+          nextStage.unlocked = true;
+        }
+      }
+    }
+
+    this.syncChapterData();
+
+    const newlyUnlocked = this.checkChapterUnlocks();
+    if (newlyUnlocked.length > 0) {
+      for (const chapter of newlyUnlocked) {
+        this.addAnnouncement({
+          id: `chapter-unlock-${chapter.id}-${performance.now()}`,
+          title: '章节解锁！',
+          content: `「${chapter.name}」已开启`,
+          type: 'stage_complete',
+          duration: 4000,
+          startTime: performance.now(),
+          priority: 12,
+        });
       }
     }
 

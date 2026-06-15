@@ -5,7 +5,7 @@ export { PauseSettlement } from './components/PauseSettlement';
 export { StageSettlementScreen } from './components/StageSettlementScreen';
 export { useStageTask, stageTaskStateEmitter } from './useStageTask';
 export { StageTaskEngine } from './stageTaskEngine';
-export { STAGES, getStageById, getStages } from './stageTaskData';
+export { STAGES, CHAPTERS, getStageById, getStages, getChapterById, getChapters } from './stageTaskData';
 export type {
   Stage,
   StageTask,
@@ -14,4 +14,6 @@ export type {
   StageSettlement,
   TaskType,
   TaskDifficulty,
+  Chapter,
+  ChapterUnlockCondition,
 } from './types';

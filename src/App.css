@@ -1075,6 +1075,60 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
+.difficulty-btn.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.difficulty-unlock-hint {
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+  margin-bottom: 8px;
+  font-style: italic;
+}
+
+.chapter-progress-bar-menu {
+  margin: 8px 0;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cpb-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.cpb-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.cpb-stats {
+  font-size: 11px;
+  color: #666;
+}
+
+.cpb-bar {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cpb-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4ecdc4, #667eea);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
 .difficulty-desc {
   font-size: 12px;
   text-align: center;

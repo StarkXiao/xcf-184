@@ -26,11 +26,37 @@ export interface StageTask {
   bonusMultiplier?: number;
 }
 
+export type ChapterUnlockCondition =
+  | { type: 'chapter_complete'; chapterId: string; minStars: number }
+  | { type: 'total_stars'; count: number }
+  | { type: 'best_score'; minScore: number }
+  | { type: 'difficulty_cleared'; difficulty: 'easy' | 'normal' | 'hard' | 'extreme' }
+  | { type: 'always' };
+
+export interface Chapter {
+  id: string;
+  name: string;
+  subtitle: string;
+  description: string;
+  chapterNumber: number;
+  stageIds: string[];
+  unlockCondition: ChapterUnlockCondition;
+  unlocked: boolean;
+  completed: boolean;
+  totalStars: number;
+  maxStars: number;
+  unlockedDifficulties: ('easy' | 'normal' | 'hard' | 'extreme')[];
+  themeColor: string;
+  themeGradient: string;
+  icon: string;
+}
+
 export interface Stage {
   id: string;
   name: string;
   description: string;
   stageNumber: number;
+  chapterId: string;
   tasks: StageTask[];
   weatherTheme: 'sunny' | 'cloudy' | 'windy' | 'stormy' | 'night';
   airCurrentTheme: 'calm' | 'moderate' | 'turbulent' | 'extreme';
@@ -122,3 +148,10 @@ export const AIR_CURRENT_THEME_NAMES: Record<string, string> = {
   turbulent: '湍急',
   extreme: '狂暴',
 };
+
+export const DIFFICULTY_UNLOCK_ORDER: ('easy' | 'normal' | 'hard' | 'extreme')[] = [
+  'easy',
+  'normal',
+  'hard',
+  'extreme',
+];
