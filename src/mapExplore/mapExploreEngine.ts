@@ -343,6 +343,15 @@ export class MapExploreEngine {
     this.updateStageProgress(regionId, stats, adjustedScore);
     this.checkStageCompletion(regionId, result);
 
+    regionProgress.totalScoreInRegion += result.totalRewardScore;
+
+    if (result.totalRewardScore > 0) {
+      const newTotalScore = regionProgress.totalScoreInRegion;
+      if (newTotalScore > regionProgress.bestScoreInRegion) {
+        regionProgress.bestScoreInRegion = newTotalScore;
+      }
+    }
+
     this.recalculateExploration();
     this.saveToLocalStorage();
 
@@ -631,7 +640,10 @@ export class MapExploreEngine {
         result.newlyCompletedStages.push({
           id: stageId,
           name: stage.name,
+          rewardCoins: stage.rewardCoins,
+          rewardScore: stage.rewardScore,
         });
+        result.totalRewardScore += stage.rewardScore;
 
         const stageIdx = region.stageIds.indexOf(stageId);
         if (stageIdx >= 0 && stageIdx < region.stageIds.length - 1) {
@@ -673,6 +685,12 @@ export class MapExploreEngine {
     const baseRewardCoins = stage.rewardCoins;
     const bonusRewardCoins = bonusAchieved ? (stage.bonusRewardCoins || 0) : 0;
     const totalRewardCoins = baseRewardCoins + bonusRewardCoins;
+    const totalRewardScore = stage.rewardScore;
+
+    regionProgress.totalScoreInRegion += totalRewardScore;
+    if (regionProgress.totalScoreInRegion > regionProgress.bestScoreInRegion) {
+      regionProgress.bestScoreInRegion = regionProgress.totalScoreInRegion;
+    }
 
     const result: StageSettlementResult = {
       stageId,
@@ -683,7 +701,7 @@ export class MapExploreEngine {
       bonusAchieved,
       bonusRewardCoins,
       totalRewardCoins,
-      scoreReward: stage.rewardScore,
+      scoreReward: totalRewardScore,
     };
 
     this.state.lastSettlementResults.push(result);

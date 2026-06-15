@@ -21,12 +21,14 @@ interface MapExploreCenterProps {
   onClose: () => void;
   onStartFlight: (regionId: string) => void;
   onAddCoins: (amount: number) => void;
+  onAddScore?: (amount: number) => void;
 }
 
 export const MapExploreCenter: React.FC<MapExploreCenterProps> = ({
   onClose,
   onStartFlight,
   onAddCoins,
+  onAddScore,
 }) => {
   const explore = useMapExplore();
   const [activeTab, setActiveTab] = useState<TabType>('map');
@@ -58,6 +60,9 @@ export const MapExploreCenter: React.FC<MapExploreCenterProps> = ({
     const result = explore.settleStage(stageId);
     if (result) {
       onAddCoins(result.totalRewardCoins);
+      if (result.scoreReward > 0 && onAddScore) {
+        onAddScore(result.scoreReward);
+      }
     }
   };
 

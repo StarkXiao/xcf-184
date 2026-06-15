@@ -360,6 +360,14 @@ function App() {
         setEarnedCoins((prev) => prev + flightResult.totalRewardCoins);
       }
 
+      if (flightResult.totalRewardScore > 0) {
+        const newAdjustedScore = adjustedScore + flightResult.totalRewardScore;
+        setAdjustedFinalStats((prev) => ({
+          ...prev,
+          score: newAdjustedScore,
+        }));
+      }
+
       mapExploreRegionIdRef.current = null;
       setMapExploreRegionId(null);
       mapExploreStateEmitter.emit();
@@ -937,6 +945,8 @@ function App() {
           onStartFlight={handleStartMapExploreFlight}
           onAddCoins={(amount) => {
             workshop.addCoins(amount);
+          }}
+          onAddScore={(_amount) => {
           }}
         />
       )}

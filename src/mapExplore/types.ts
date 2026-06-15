@@ -189,6 +189,8 @@ export interface MapExploreFlightResult {
   newlyCompletedStages: Array<{
     id: string;
     name: string;
+    rewardCoins: number;
+    rewardScore: number;
   }>;
   newlyCompletedStoryEvents: Array<{
     id: string;
