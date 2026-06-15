@@ -349,7 +349,17 @@ function App() {
 
     const currentMapExploreRegionId = mapExploreRegionIdRef.current;
     if (currentMapExploreRegionId) {
-      mapExploreEngine.recordFlightInRegion(currentMapExploreRegionId, gameOverStats, adjustedScore);
+      const flightResult = mapExploreEngine.recordFlightInRegion(
+        currentMapExploreRegionId,
+        gameOverStats,
+        adjustedScore
+      );
+
+      if (flightResult.totalRewardCoins > 0) {
+        workshop.addCoins(flightResult.totalRewardCoins);
+        setEarnedCoins((prev) => prev + flightResult.totalRewardCoins);
+      }
+
       mapExploreRegionIdRef.current = null;
       setMapExploreRegionId(null);
       mapExploreStateEmitter.emit();

@@ -50,6 +50,9 @@ export const RareAirCurrentPanel: React.FC<RareAirCurrentPanelProps> = ({
                     <div className="me-rac-discovery">
                       发现条件：{rac.discoveryCondition}
                     </div>
+                    <div className="me-rac-capture-condition">
+                      捕获条件：{rac.captureCondition.description}
+                    </div>
                   </>
                 )}
                 {isDiscovered && (
@@ -57,7 +60,7 @@ export const RareAirCurrentPanel: React.FC<RareAirCurrentPanelProps> = ({
                     className="me-rac-capture-btn"
                     onClick={() => onStartFlight(rac.regionId)}
                   >
-                    ✈️ 前往捕获
+                    ✈️ 前往飞行捕获
                   </button>
                 )}
                 {isCaptured && (

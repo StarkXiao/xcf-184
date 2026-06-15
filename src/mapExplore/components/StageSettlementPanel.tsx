@@ -29,7 +29,6 @@ export const StageSettlementPanel: React.FC<StageSettlementPanelProps> = ({
           const status = stageStatuses[stage.id] || 'locked';
           const progress = stageProgress[stage.id] || {};
           const isLocked = status === 'locked';
-          const isActive = status === 'active';
           const isCompleted = status === 'completed';
           const isClaimed = status === 'claimed';
 

@@ -6,7 +6,6 @@ import { BuildingClusterPanel } from './BuildingClusterPanel';
 import { RareAirCurrentPanel } from './RareAirCurrentPanel';
 import { StoryEventPanel } from './StoryEventPanel';
 import { StageSettlementPanel } from './StageSettlementPanel';
-import type { Region } from '../types';
 
 type TabType = 'map' | 'buildings' | 'currents' | 'stories' | 'stages';
 
@@ -53,16 +52,6 @@ export const MapExploreCenter: React.FC<MapExploreCenterProps> = ({
       onAddCoins(-cluster.unlockCost);
       return true;
     });
-  };
-
-  const handleExploreBuildingCluster = (clusterId: string) => {
-    const cluster = mapExploreEngine.getBuildingCluster(clusterId);
-    if (!cluster) return;
-    explore.completeBuildingCluster(clusterId);
-    onAddCoins(cluster.rewardCoins);
-    if (cluster.rewardScore) {
-      onStartFlight(cluster.regionId);
-    }
   };
 
   const handleSettleStage = (stageId: string) => {
@@ -188,7 +177,6 @@ export const MapExploreCenter: React.FC<MapExploreCenterProps> = ({
                         clusters={clusters}
                         clusterStatuses={progress.buildingClusterStatuses}
                         onUnlock={handleUnlockBuildingCluster}
-                        onExplore={handleExploreBuildingCluster}
                       />
                     </div>
                   );

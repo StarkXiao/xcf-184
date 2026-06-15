@@ -1,13 +1,9 @@
 import type {
   MapExploreState,
   RegionProgress,
-  RegionStatus,
-  BuildingClusterStatus,
-  RareAirCurrentStatus,
-  StoryEventStatus,
-  StageStatus,
   StageSettlementResult,
-  StageObjectiveType,
+  Stage,
+  MapExploreFlightResult,
 } from './types';
 import {
   REGIONS,
@@ -316,9 +312,11 @@ export class MapExploreEngine {
     return true;
   }
 
-  public recordFlightInRegion(regionId: string, stats: GameStats, adjustedScore: number): void {
+  public recordFlightInRegion(regionId: string, stats: GameStats, adjustedScore: number): MapExploreFlightResult {
     const regionProgress = this.state.regionProgress[regionId];
-    if (!regionProgress || regionProgress.status !== 'unlocked') return;
+    if (!regionProgress || regionProgress.status !== 'unlocked') {
+      return this.createEmptyFlightResult(regionId);
+    }
 
     regionProgress.totalFlightsInRegion += 1;
     regionProgress.totalScoreInRegion += adjustedScore;
@@ -328,11 +326,221 @@ export class MapExploreEngine {
       regionProgress.bestScoreInRegion = adjustedScore;
     }
 
+    const result: MapExploreFlightResult = {
+      regionId,
+      newlyExploredBuildingClusters: [],
+      newlyDiscoveredAirCurrents: [],
+      newlyCapturedAirCurrents: [],
+      newlyCompletedStages: [],
+      newlyCompletedStoryEvents: [],
+      totalRewardCoins: 0,
+      totalRewardScore: 0,
+    };
+
+    this.checkBuildingClusterExploration(regionId, stats, adjustedScore, result);
+    this.checkRareAirCurrentDiscovery(regionId, stats, adjustedScore, result);
+    this.checkRareAirCurrentCapture(regionId, stats, adjustedScore, result);
     this.updateStageProgress(regionId, stats, adjustedScore);
-    this.checkStageCompletion(regionId);
-    this.checkRareAirCurrentDiscovery(regionId, stats, adjustedScore);
+    this.checkStageCompletion(regionId, result);
+
     this.recalculateExploration();
     this.saveToLocalStorage();
+
+    return result;
+  }
+
+  private createEmptyFlightResult(regionId: string): MapExploreFlightResult {
+    return {
+      regionId,
+      newlyExploredBuildingClusters: [],
+      newlyDiscoveredAirCurrents: [],
+      newlyCapturedAirCurrents: [],
+      newlyCompletedStages: [],
+      newlyCompletedStoryEvents: [],
+      totalRewardCoins: 0,
+      totalRewardScore: 0,
+    };
+  }
+
+  private checkBuildingClusterExploration(
+    regionId: string,
+    stats: GameStats,
+    adjustedScore: number,
+    result: MapExploreFlightResult,
+  ): void {
+    const regionProgress = this.state.regionProgress[regionId];
+    if (!regionProgress) return;
+
+    const region = this.getRegion(regionId);
+    if (!region) return;
+
+    region.buildingClusterIds.forEach((clusterId) => {
+      const status = regionProgress.buildingClusterStatuses[clusterId];
+      if (status !== 'unlocked') return;
+
+      const cluster = this.getBuildingCluster(clusterId);
+      if (!cluster) return;
+
+      const condition = cluster.explorationCondition;
+      let explored = false;
+
+      switch (condition.type) {
+        case 'distance':
+          explored = stats.distance >= condition.target;
+          break;
+        case 'height':
+          explored = stats.maxHeight >= condition.target;
+          break;
+        case 'score':
+          explored = adjustedScore >= condition.target;
+          break;
+        case 'aircurrent_count':
+          explored = stats.airCurrentCount >= condition.target;
+          break;
+        case 'no_collision':
+          explored = stats.collisions === 0;
+          break;
+        default:
+          break;
+      }
+
+      if (explored) {
+        regionProgress.buildingClusterStatuses[clusterId] = 'completed';
+        result.newlyExploredBuildingClusters.push({
+          id: clusterId,
+          name: cluster.name,
+          rewardCoins: cluster.rewardCoins,
+          rewardScore: cluster.rewardScore || 0,
+        });
+        result.totalRewardCoins += cluster.rewardCoins;
+        result.totalRewardScore += cluster.rewardScore || 0;
+
+        const clusterIds = region.buildingClusterIds;
+        const currentIdx = clusterIds.indexOf(clusterId);
+        if (currentIdx >= 0 && currentIdx < clusterIds.length - 1) {
+          const nextId = clusterIds[currentIdx + 1];
+          if (regionProgress.buildingClusterStatuses[nextId] === 'locked') {
+            regionProgress.buildingClusterStatuses[nextId] = 'unlockable';
+          }
+        }
+      }
+    });
+  }
+
+  private checkRareAirCurrentDiscovery(
+    regionId: string,
+    stats: GameStats,
+    adjustedScore: number,
+    result: MapExploreFlightResult,
+  ): void {
+    const regionProgress = this.state.regionProgress[regionId];
+    if (!regionProgress) return;
+
+    const region = this.getRegion(regionId);
+    if (!region) return;
+
+    region.rareAirCurrentIds.forEach((racId) => {
+      if (regionProgress.rareAirCurrentStatuses[racId] !== 'undiscovered') return;
+
+      const rac = this.getRareAirCurrent(racId);
+      if (!rac) return;
+
+      let shouldDiscover = false;
+
+      switch (rac.regionId) {
+        case 'region_old_town':
+          if (stats.distance >= 300) shouldDiscover = true;
+          break;
+        case 'region_riverside':
+          if (stats.collisions === 0 || stats.maxHeight >= 150) shouldDiscover = true;
+          break;
+        case 'region_mountain_peak':
+          if (stats.maxHeight >= 250 || stats.airCurrentCount >= 3 || regionProgress.totalFlightsInRegion >= 2) shouldDiscover = true;
+          break;
+        case 'region_industrial':
+          if (adjustedScore >= 3000) shouldDiscover = true;
+          break;
+        case 'region_ancient_ruins':
+          if (stats.distance >= 800) shouldDiscover = true;
+          break;
+        case 'region_sky_island':
+          if (regionProgress.totalFlightsInRegion >= 2 || stats.maxHeight >= 500 || adjustedScore >= 10000) shouldDiscover = true;
+          break;
+      }
+
+      if (shouldDiscover) {
+        regionProgress.rareAirCurrentStatuses[racId] = 'discovered';
+        result.newlyDiscoveredAirCurrents.push({
+          id: racId,
+          name: rac.name,
+        });
+      }
+    });
+  }
+
+  private checkRareAirCurrentCapture(
+    regionId: string,
+    stats: GameStats,
+    adjustedScore: number,
+    result: MapExploreFlightResult,
+  ): void {
+    const regionProgress = this.state.regionProgress[regionId];
+    if (!regionProgress) return;
+
+    const region = this.getRegion(regionId);
+    if (!region) return;
+
+    region.rareAirCurrentIds.forEach((racId) => {
+      if (regionProgress.rareAirCurrentStatuses[racId] !== 'discovered') return;
+
+      const rac = this.getRareAirCurrent(racId);
+      if (!rac) return;
+
+      const condition = rac.captureCondition;
+      let captured = false;
+
+      switch (condition.type) {
+        case 'distance':
+          captured = stats.distance >= condition.target;
+          break;
+        case 'height':
+          captured = stats.maxHeight >= condition.target;
+          break;
+        case 'score':
+          captured = adjustedScore >= condition.target;
+          break;
+        case 'aircurrent_count':
+          captured = stats.airCurrentCount >= condition.target;
+          break;
+        case 'no_collision':
+          captured = stats.collisions === 0;
+          break;
+        default:
+          break;
+      }
+
+      if (captured) {
+        regionProgress.rareAirCurrentStatuses[racId] = 'captured';
+        this.state.totalRareCurrentsCaptured += 1;
+        result.newlyCapturedAirCurrents.push({
+          id: racId,
+          name: rac.name,
+          rewardCoins: rac.rewardCoins,
+          captureScore: rac.captureScore,
+        });
+        result.totalRewardCoins += rac.rewardCoins;
+        result.totalRewardScore += rac.captureScore;
+
+        const racIds = region.rareAirCurrentIds;
+        const currentIdx = racIds.indexOf(racId);
+        if (currentIdx >= 0 && currentIdx < racIds.length - 1) {
+          const nextId = racIds[currentIdx + 1];
+          if (regionProgress.rareAirCurrentStatuses[nextId] === 'undiscovered') {
+            regionProgress.rareAirCurrentStatuses[nextId] = 'discovered';
+          }
+        }
+      }
+    });
   }
 
   private updateStageProgress(regionId: string, stats: GameStats, adjustedScore: number): void {
@@ -398,7 +606,7 @@ export class MapExploreEngine {
     });
   }
 
-  private checkStageCompletion(regionId: string): void {
+  private checkStageCompletion(regionId: string, result: MapExploreFlightResult): void {
     const regionProgress = this.state.regionProgress[regionId];
     if (!regionProgress) return;
 
@@ -420,6 +628,10 @@ export class MapExploreEngine {
       if (allComplete) {
         regionProgress.stageStatuses[stageId] = 'completed';
         this.state.totalStagesCompleted += 1;
+        result.newlyCompletedStages.push({
+          id: stageId,
+          name: stage.name,
+        });
 
         const stageIdx = region.stageIds.indexOf(stageId);
         if (stageIdx >= 0 && stageIdx < region.stageIds.length - 1) {
@@ -428,48 +640,6 @@ export class MapExploreEngine {
             regionProgress.stageStatuses[nextStageId] = 'active';
           }
         }
-      }
-    });
-  }
-
-  private checkRareAirCurrentDiscovery(regionId: string, stats: GameStats, adjustedScore: number): void {
-    const regionProgress = this.state.regionProgress[regionId];
-    if (!regionProgress) return;
-
-    const region = this.getRegion(regionId);
-    if (!region) return;
-
-    region.rareAirCurrentIds.forEach((racId) => {
-      if (regionProgress.rareAirCurrentStatuses[racId] !== 'undiscovered') return;
-
-      const rac = this.getRareAirCurrent(racId);
-      if (!rac) return;
-
-      let shouldDiscover = false;
-
-      switch (rac.regionId) {
-        case 'region_old_town':
-          if (stats.distance >= 300) shouldDiscover = true;
-          break;
-        case 'region_riverside':
-          if (stats.collisions === 0 || stats.maxHeight >= 150) shouldDiscover = true;
-          break;
-        case 'region_mountain_peak':
-          if (stats.maxHeight >= 250 || stats.airCurrentCount >= 3 || regionProgress.totalFlightsInRegion >= 2) shouldDiscover = true;
-          break;
-        case 'region_industrial':
-          if (adjustedScore >= 3000) shouldDiscover = true;
-          break;
-        case 'region_ancient_ruins':
-          if (stats.distance >= 800) shouldDiscover = true;
-          break;
-        case 'region_sky_island':
-          if (regionProgress.totalFlightsInRegion >= 2 || stats.maxHeight >= 500 || adjustedScore >= 10000) shouldDiscover = true;
-          break;
-      }
-
-      if (shouldDiscover) {
-        regionProgress.rareAirCurrentStatuses[racId] = 'discovered';
       }
     });
   }

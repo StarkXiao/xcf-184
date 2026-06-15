@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { mapExploreEngine } from './mapExploreEngine';
-import type { MapExploreState, StageSettlementResult } from './types';
+import type { MapExploreState, StageSettlementResult, MapExploreFlightResult } from './types';
 import type { GameStats } from '../game/types';
 
 type Listener = () => void;
@@ -60,42 +60,6 @@ export function useMapExplore(autoRefresh = true) {
     [refreshState]
   );
 
-  const completeBuildingCluster = useCallback(
-    (clusterId: string): boolean => {
-      const result = mapExploreEngine.completeBuildingCluster(clusterId);
-      if (result) {
-        mapExploreStateEmitter.emit();
-        refreshState();
-      }
-      return result;
-    },
-    [refreshState]
-  );
-
-  const discoverRareAirCurrent = useCallback(
-    (currentId: string): boolean => {
-      const result = mapExploreEngine.discoverRareAirCurrent(currentId);
-      if (result) {
-        mapExploreStateEmitter.emit();
-        refreshState();
-      }
-      return result;
-    },
-    [refreshState]
-  );
-
-  const captureRareAirCurrent = useCallback(
-    (currentId: string): boolean => {
-      const result = mapExploreEngine.captureRareAirCurrent(currentId);
-      if (result) {
-        mapExploreStateEmitter.emit();
-        refreshState();
-      }
-      return result;
-    },
-    [refreshState]
-  );
-
   const startStoryEvent = useCallback(
     (eventId: string): boolean => {
       const result = mapExploreEngine.startStoryEvent(eventId);
@@ -139,10 +103,11 @@ export function useMapExplore(autoRefresh = true) {
   );
 
   const recordFlightInRegion = useCallback(
-    (regionId: string, stats: GameStats, adjustedScore: number): void => {
-      mapExploreEngine.recordFlightInRegion(regionId, stats, adjustedScore);
+    (regionId: string, stats: GameStats, adjustedScore: number): MapExploreFlightResult => {
+      const result = mapExploreEngine.recordFlightInRegion(regionId, stats, adjustedScore);
       mapExploreStateEmitter.emit();
       refreshState();
+      return result;
     },
     [refreshState]
   );
@@ -169,9 +134,6 @@ export function useMapExplore(autoRefresh = true) {
     state,
     unlockRegion,
     unlockBuildingCluster,
-    completeBuildingCluster,
-    discoverRareAirCurrent,
-    captureRareAirCurrent,
     startStoryEvent,
     advanceStoryDialogue,
     settleStage,

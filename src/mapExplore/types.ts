@@ -51,6 +51,11 @@ export interface BuildingCluster {
   minHeight: number;
   maxHeight: number;
   specialEffect?: string;
+  explorationCondition: {
+    type: StageObjectiveType;
+    target: number;
+    description: string;
+  };
   rewardCoins: number;
   rewardScore?: number;
 }
@@ -66,6 +71,11 @@ export interface RareAirCurrent {
   strength: number;
   duration: number;
   discoveryCondition: string;
+  captureCondition: {
+    type: StageObjectiveType;
+    target: number;
+    description: string;
+  };
   captureScore: number;
   rewardCoins: number;
 }
@@ -156,6 +166,36 @@ export interface MapExploreState {
   activeStoryEventId: string | null;
   activeStoryDialogueIndex: number;
   lastSettlementResults: StageSettlementResult[];
+}
+
+export interface MapExploreFlightResult {
+  regionId: string;
+  newlyExploredBuildingClusters: Array<{
+    id: string;
+    name: string;
+    rewardCoins: number;
+    rewardScore: number;
+  }>;
+  newlyDiscoveredAirCurrents: Array<{
+    id: string;
+    name: string;
+  }>;
+  newlyCapturedAirCurrents: Array<{
+    id: string;
+    name: string;
+    rewardCoins: number;
+    captureScore: number;
+  }>;
+  newlyCompletedStages: Array<{
+    id: string;
+    name: string;
+  }>;
+  newlyCompletedStoryEvents: Array<{
+    id: string;
+    name: string;
+  }>;
+  totalRewardCoins: number;
+  totalRewardScore: number;
 }
 
 export const REGION_TERRAIN_NAMES: Record<RegionTerrain, string> = {

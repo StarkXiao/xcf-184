@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Region, RegionProgress } from '../types';
-import { REGION_TERRAIN_NAMES, REGION_STATUS_NAMES } from '../types';
+import { REGION_STATUS_NAMES } from '../types';
 
 interface RegionMapProps {
   regions: Region[];
