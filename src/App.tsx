@@ -29,6 +29,9 @@ import { festivalStateEmitter } from './festival/useFestival';
 import { MapExploreCenter } from './mapExplore';
 import { mapExploreEngine } from './mapExplore/mapExploreEngine';
 import { mapExploreStateEmitter } from './mapExplore/useMapExplore';
+import { ReplayCenter } from './replay';
+import { replayEngine } from './replay/replayEngine';
+import type { FlightRecord } from './journey/types';
 import './App.css';
 import './workshop/workshop.css';
 import './tournament/tournament.css';
@@ -38,6 +41,7 @@ import './levelEditor/levelEditor.css';
 import './journey/journey.css';
 import './festival/festival.css';
 import './mapExplore/mapExplore.css';
+import './replay/replay.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -79,6 +83,7 @@ function App() {
   const [festivalSceneId, setFestivalSceneId] = useState<string | null>(null);
   const [showMapExplore, setShowMapExplore] = useState(false);
   const [mapExploreRegionId, setMapExploreRegionId] = useState<string | null>(null);
+  const [showReplay, setShowReplay] = useState(false);
   const [, setForceUpdate] = useState(0);
   const flightDataPointsRef = useRef<FlightDataPoint[]>([]);
   const flightDataLastSaveTimeRef = useRef<number>(0);
@@ -399,6 +404,14 @@ function App() {
       equippedParts: workshop.equipped as unknown as Record<string, string | null>,
     });
 
+    if (journeyResult && journeyTrajectory.length > 20) {
+      try {
+        replayEngine.createReplayFromFlightRecord(journeyResult.record as FlightRecord);
+      } catch (e) {
+        console.warn('Failed to create replay:', e);
+      }
+    }
+
     if (journeyResult.newAchievements.length > 0) {
       setNewJourneyAchievements(journeyResult.newAchievements);
       const achievementCoins = journeyResult.newAchievements.reduce(
@@ -580,6 +593,14 @@ function App() {
 
   const handleCloseMapExplore = () => {
     setShowMapExplore(false);
+  };
+
+  const handleOpenReplay = () => {
+    setShowReplay(true);
+  };
+
+  const handleCloseReplay = () => {
+    setShowReplay(false);
   };
 
   const handleStartMapExploreFlight = (regionId: string) => {
@@ -844,6 +865,7 @@ function App() {
           onJourney={handleOpenJourney}
           onFestival={handleOpenFestival}
           onMapExplore={handleOpenMapExplore}
+          onReplay={handleOpenReplay}
         />
       )}
 
@@ -948,6 +970,13 @@ function App() {
           }}
           onAddScore={(_amount) => {
           }}
+        />
+      )}
+
+      {showReplay && (
+        <ReplayCenter
+          onClose={handleCloseReplay}
+          flightRecords={journey.getFlightRecordsByMode()}
         />
       )}
     </div>
