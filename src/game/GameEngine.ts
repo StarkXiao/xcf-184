@@ -6,6 +6,7 @@ import { AirCurrentSystem } from './AirCurrentSystem';
 import { CollisionSystem } from './CollisionSystem';
 import { WeatherSystem } from './WeatherSystem';
 import { ShadowTrackingSystem } from './ShadowTrackingSystem';
+import { ComboFlowSystem } from './ComboFlowSystem';
 import type {
   GameConfig,
   GameStats,
@@ -21,6 +22,7 @@ import {
   DEFAULT_DURABILITY_CONFIG,
   DEFAULT_TENSION_CONFIG,
   DIFFICULTY_PRESETS,
+  DEFAULT_COMBO_FLOW_STATE,
 } from './types';
 import type { LevelScene, EditorBuilding, EditorAirCurrent } from '../levelEditor/types';
 import type { StageTaskEngine } from '../stageTask/stageTaskEngine';
@@ -50,6 +52,7 @@ export class GameEngine {
   private collisionSystem!: CollisionSystem;
   private weatherSystem!: WeatherSystem;
   private shadowTrackingSystem!: ShadowTrackingSystem;
+  private comboFlowSystem!: ComboFlowSystem;
 
   private animationId: number | null = null;
   private lastTime: number = 0;
@@ -138,6 +141,7 @@ export class GameEngine {
       baseScore: 0,
       weatherBonusScore: 0,
       lightningNearMiss: 0,
+      comboFlow: { ...DEFAULT_COMBO_FLOW_STATE, hits: [] },
     };
   }
 
@@ -167,6 +171,8 @@ export class GameEngine {
       this.sceneManager.scene,
       this.config
     );
+
+    this.comboFlowSystem = new ComboFlowSystem(this.sceneManager.scene);
 
     this.sceneManager.scene.add(this.kite.group);
     this.sceneManager.scene.add(this.kite.shadowMesh);
@@ -216,6 +222,8 @@ export class GameEngine {
       this.sceneManager.scene,
       this.config
     );
+
+    this.comboFlowSystem.reset();
 
     if (this.currentLevel) {
       this.loadAirCurrents(this.currentLevel.airCurrents);
@@ -290,7 +298,7 @@ export class GameEngine {
     this.stats.timeOfDayPhase = this.weatherSystem.getTimeOfDayPhase(timeProgress);
     this.stats.scoreMultiplier = weatherEventState.scoreMultiplier;
     this.stats.visibility = weatherEventState.visibility;
-    this.stats.weatherEventDuration = Math.max(0, weatherEventState.weatherEventDuration);
+    this.stats.weatherEventDuration = weatherEventState.weatherEventDuration;
 
     const activeLightning = this.weatherSystem.getActiveLightning();
     this.sceneManager.updateWeatherVisuals(
@@ -375,6 +383,17 @@ export class GameEngine {
       }
     }
 
+    this.comboFlowSystem.update(
+      delta,
+      currentTime,
+      this.kite.group.position,
+      this.kite.velocity,
+      this.airCurrentSystem.airCurrents,
+      shadowBrightness,
+      this.stats.flightStability
+    );
+    this.stats.comboFlow = this.comboFlowSystem.getState();
+
     const collision = this.collisionSystem.checkKiteCollision(
       this.kite.group.position,
       this.kite.velocity
@@ -443,7 +462,8 @@ export class GameEngine {
         shadowBonusScore +
         this.stats.flightStability * 50 +
         durabilityBonusScore +
-        tensionBonusScore -
+        tensionBonusScore +
+        this.stats.comboFlow.totalComboScore -
         this.collisions * 10 -
         Math.floor(this.totalDamageTaken * 0.5)
     );

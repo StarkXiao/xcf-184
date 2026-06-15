@@ -21,7 +21,6 @@ export class SceneManager {
   private baseFogFar: number;
   private targetFogNear: number;
   private targetFogFar: number;
-  private currentWeatherEvent: WeatherEventType = 'clear';
   private lightningFlashIntensity: number = 0;
 
   constructor(container: HTMLElement, config: GameConfig) {
@@ -414,10 +413,9 @@ export class SceneManager {
     timeOfDay: number,
     weatherEvent: WeatherEventType,
     fogDensity: number,
-    visibility: number,
+    _visibility: number,
     activeLightning: LightningStrike | null
   ): void {
-    this.currentWeatherEvent = weatherEvent;
 
     const fogFactor = 1 - fogDensity * 0.7;
     this.targetFogNear = this.baseFogNear * fogFactor;

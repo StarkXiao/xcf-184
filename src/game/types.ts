@@ -15,6 +15,7 @@ export type TimeOfDayPhase = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'sunset
 export interface LightningStrike {
   id: string;
   position: Vector3;
+  startTime: number;
   duration: number;
   maxDuration: number;
   intensity: number;
@@ -24,6 +25,7 @@ export interface WeatherEventState {
   currentEvent: WeatherEventType;
   eventStartTime: number;
   eventDuration: number;
+  weatherEventDuration: number;
   scoreMultiplier: number;
   turbulenceMultiplier: number;
   windSpeedMultiplier: number;
@@ -176,6 +178,7 @@ export interface GameStats {
   baseScore: number;
   weatherBonusScore: number;
   lightningNearMiss: number;
+  comboFlow: ComboFlowState;
 }
 
 export interface WindFieldConfig {
@@ -312,6 +315,63 @@ export const DEFAULT_TENSION_CONFIG: TensionConfig = {
   rapidReelThreshold: 15,
   tensionDamageRate: 0.15,
 };
+
+export interface ComboFlowHit {
+  id: string;
+  airCurrentId: string;
+  timestamp: number;
+  type: 'updraft' | 'downdraft' | 'turbulence';
+  strength: number;
+  shadowBrightness: number;
+  score: number;
+  comboCount: number;
+  isPerfect: boolean;
+  position: Vector3;
+}
+
+export interface ComboFlowState {
+  combo: number;
+  maxCombo: number;
+  totalHits: number;
+  perfectHits: number;
+  comboScore: number;
+  totalComboScore: number;
+  currentMultiplier: number;
+  lastHitTime: number;
+  comboTimeout: number;
+  hits: ComboFlowHit[];
+  isActive: boolean;
+  comboBreakCount: number;
+  longestComboTime: number;
+  comboStartTime: number;
+}
+
+export const DEFAULT_COMBO_FLOW_STATE: ComboFlowState = {
+  combo: 0,
+  maxCombo: 0,
+  totalHits: 0,
+  perfectHits: 0,
+  comboScore: 0,
+  totalComboScore: 0,
+  currentMultiplier: 1.0,
+  lastHitTime: 0,
+  comboTimeout: 2.5,
+  hits: [],
+  isActive: false,
+  comboBreakCount: 0,
+  longestComboTime: 0,
+  comboStartTime: 0,
+};
+
+export interface ComboVisualEffect {
+  id: string;
+  type: 'hit' | 'combo' | 'perfect' | 'break' | 'milestone';
+  position: Vector3;
+  startTime: number;
+  duration: number;
+  value?: number;
+  text?: string;
+}
 
 export const DIFFICULTY_PRESETS: Record<string, Partial<GameConfig>> = {
   easy: {

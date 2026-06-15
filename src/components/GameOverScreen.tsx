@@ -1,5 +1,5 @@
-import React from 'react';
-import type { GameStats } from '../game/types';
+import React, { useMemo } from 'react';
+import type { GameStats, ComboFlowHit } from '../game/types';
 
 interface GameOverScreenProps {
   stats: GameStats;
@@ -10,6 +10,33 @@ interface GameOverScreenProps {
   onMainMenu: () => void;
   onWorkshop?: () => void;
 }
+
+const AIR_CURRENT_TYPE_NAMES: Record<string, string> = {
+  updraft: '上升气流',
+  downdraft: '下沉气流',
+  turbulence: '湍流',
+};
+
+const getComboColor = (combo: number): string => {
+  if (combo >= 50) return '#ff0080';
+  if (combo >= 30) return '#ff00ff';
+  if (combo >= 20) return '#ff4040';
+  if (combo >= 10) return '#ff8c00';
+  if (combo >= 5) return '#ffd700';
+  return '#4ecdc4';
+};
+
+const getComboGrade = (maxCombo: number, perfectHits: number, totalHits: number): { grade: string; color: string } => {
+  const perfectRate = totalHits > 0 ? perfectHits / totalHits : 0;
+  if (maxCombo >= 100 && perfectRate >= 0.5) return { grade: 'SS+', color: '#ff0080' };
+  if (maxCombo >= 50) return { grade: 'SS', color: '#ff00ff' };
+  if (maxCombo >= 30) return { grade: 'S', color: '#ffd700' };
+  if (maxCombo >= 20) return { grade: 'A+', color: '#ff6b6b' };
+  if (maxCombo >= 10) return { grade: 'A', color: '#ff8c00' };
+  if (maxCombo >= 5) return { grade: 'B', color: '#4ecdc4' };
+  if (maxCombo >= 3) return { grade: 'C', color: '#95e1d3' };
+  return { grade: 'D', color: '#aaaaaa' };
+};
 
 export const GameOverScreen: React.FC<GameOverScreenProps> = ({
   stats,
@@ -35,6 +62,20 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
   };
 
   const { rank, color } = getRank(stats.score);
+  const comboFlow = stats.comboFlow;
+  const hasComboData = comboFlow && comboFlow.totalHits > 0;
+
+  const comboGrade = useMemo(() => {
+    if (!comboFlow) return { grade: 'D', color: '#aaaaaa' };
+    return getComboGrade(comboFlow.maxCombo, comboFlow.perfectHits, comboFlow.totalHits);
+  }, [comboFlow]);
+
+  const topHits = useMemo(() => {
+    if (!comboFlow || !comboFlow.hits) return [];
+    return [...comboFlow.hits]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+  }, [comboFlow]);
 
   return (
     <div className="menu-overlay gameover-overlay">
@@ -111,6 +152,111 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
             </div>
           </div>
         </div>
+
+        {hasComboData && (
+          <div className="combo-review-section">
+            <div className="combo-review-header">
+              <span className="combo-review-icon">⚡</span>
+              <span className="combo-review-title">连击击穿复盘</span>
+            </div>
+
+            <div className="combo-grade-display">
+              <div
+                className="combo-grade-badge"
+                style={{
+                  color: comboGrade.color,
+                  borderColor: comboGrade.color,
+                }}
+              >
+                {comboGrade.grade}
+              </div>
+              <div className="combo-grade-label">连击评级</div>
+            </div>
+
+            <div className="combo-review-stats">
+              <div className="combo-review-item">
+                <div
+                  className="combo-review-value"
+                  style={{ color: getComboColor(comboFlow.maxCombo) }}
+                >
+                  {comboFlow.maxCombo}
+                </div>
+                <div className="combo-review-label">最高连击</div>
+              </div>
+
+              <div className="combo-review-item">
+                <div className="combo-review-value" style={{ color: '#4ecdc4' }}>
+                  +{comboFlow.totalComboScore}
+                </div>
+                <div className="combo-review-label">连击总得分</div>
+              </div>
+
+              <div className="combo-review-item">
+                <div className="combo-review-value" style={{ color: '#ffd700' }}>
+                  {comboFlow.perfectHits}
+                </div>
+                <div className="combo-review-label">完美命中</div>
+              </div>
+
+              <div className="combo-review-item">
+                <div className="combo-review-value" style={{ color: '#a855f7' }}>
+                  {comboFlow.totalHits}
+                </div>
+                <div className="combo-review-label">总命中数</div>
+              </div>
+
+              <div className="combo-review-item">
+                <div className="combo-review-value" style={{ color: '#ff6b6b' }}>
+                  {comboFlow.comboBreakCount}
+                </div>
+                <div className="combo-review-label">连击中断</div>
+              </div>
+
+              <div className="combo-review-item">
+                <div className="combo-review-value" style={{ color: '#00c6ff' }}>
+                  {comboFlow.longestComboTime.toFixed(1)}s
+                </div>
+                <div className="combo-review-label">最长连击时长</div>
+              </div>
+            </div>
+
+            <div className="combo-review-hits">
+              <div className="combo-hits-header">
+                <span className="combo-hits-title">🏆 最佳命中 TOP {Math.min(topHits.length, 10)}</span>
+                <span className="combo-hits-count">共 {comboFlow.hits?.length || 0} 次记录</span>
+              </div>
+
+              {topHits.length > 0 ? (
+                <div className="combo-hits-list">
+                  {topHits.map((hit: ComboFlowHit, index: number) => (
+                    <div key={hit.id} className="combo-hit-item">
+                      <div className="combo-hit-left">
+                        <span
+                          className="combo-hit-type"
+                          style={{ opacity: 1 - index * 0.05 }}
+                        >
+                          {AIR_CURRENT_TYPE_NAMES[hit.type] || hit.type}
+                        </span>
+                        {hit.isPerfect && (
+                          <span className="combo-hit-perfect-badge">PERFECT</span>
+                        )}
+                        <span className="combo-hit-combo">#{hit.comboCount}</span>
+                      </div>
+                      <div
+                        className="combo-hit-score"
+                        style={{ color: getComboColor(hit.comboCount) }}
+                      >
+                        +{hit.score}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="combo-empty-hits">暂无命中记录</div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="performance-section">
           <h3 className="section-title">操作表现</h3>

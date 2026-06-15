@@ -139,7 +139,6 @@ export class WeatherSystem {
   private baseWindSpeed: number;
   private lightningTimer: number = 0;
   private targetCloudCoverage: number;
-  private targetFogDensity: number;
 
   constructor(scene: THREE.Scene, worldSize: number, config?: WeatherConfig) {
     this.scene = scene;
@@ -161,7 +160,6 @@ export class WeatherSystem {
     this.baseTurbulence = this.config.turbulenceLevel;
     this.baseWindSpeed = this.config.windSpeed;
     this.targetCloudCoverage = this.baseCloudCoverage;
-    this.targetFogDensity = 0;
 
     this.weatherEventState = this.createInitialEventState();
 
@@ -177,6 +175,7 @@ export class WeatherSystem {
       currentEvent: 'clear',
       eventStartTime: 0,
       eventDuration: 0,
+      weatherEventDuration: 0,
       scoreMultiplier: 1.0,
       turbulenceMultiplier: 1.0,
       windSpeedMultiplier: 1.0,
@@ -304,7 +303,6 @@ export class WeatherSystem {
     state.visibility = this.lerp(clearEffect.visibility, effect.visibility, t);
     state.damageMultiplier = this.lerp(clearEffect.damageMultiplier, effect.damageMultiplier, t);
     state.fogDensity = this.lerp(clearEffect.fogDensity, effect.fogDensity, t);
-    this.targetFogDensity = effect.fogDensity;
 
     this.targetCloudCoverage = this.baseCloudCoverage + (effect.cloudTarget - this.baseCloudCoverage) * t;
 
@@ -384,8 +382,6 @@ export class WeatherSystem {
     if (effect.hasLightning) {
       this.lightningTimer = effect.lightningInterval * Math.random();
     }
-
-    void force;
   }
 
   private endWeatherEvent(gameTime: number): void {
@@ -432,6 +428,7 @@ export class WeatherSystem {
           y: 100 + Math.random() * 100,
           z: (Math.random() - 0.5) * this.worldSize * 1.5,
         },
+        startTime: gameTime,
         duration: 0.15 + Math.random() * 0.25,
         maxDuration: 0.4,
         intensity: 0.5 + Math.random() * 0.5,
@@ -447,10 +444,8 @@ export class WeatherSystem {
     }
 
     state.lightningStrikes = state.lightningStrikes.filter((s) => {
-      const age = gameTime - (s as LightningStrike & { startTime?: number }).startTime;
-      return age < 10;
+      return gameTime - s.startTime < 10;
     });
-    void gameTime;
   }
 
   public checkLightningHit(kitePosition: Vector3): { hit: boolean; distance: number; damage: number } {
@@ -516,7 +511,6 @@ export class WeatherSystem {
   }
 
   private updateWindDirectionVariation(_delta: number): void {
-    void _delta;
     const variationAmount = 0.005 * this.windField.turbulenceLevel;
     this.windField.windDirection.x += (Math.random() - 0.5) * variationAmount;
     this.windField.windDirection.z += (Math.random() - 0.5) * variationAmount;
@@ -535,8 +529,7 @@ export class WeatherSystem {
     this.config.windDirection = { ...this.windField.windDirection };
   }
 
-  private updateClouds(delta: number): void {
-    void delta;
+  private updateClouds(_delta: number): void {
     const windSpeed = this.getCurrentWindSpeed(100);
 
     for (let i = this.clouds.length - 1; i >= 0; i--) {

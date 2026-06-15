@@ -16,6 +16,7 @@ import type {
 } from './types';
 import { PRESET_LEVELS } from './levelEditorData';
 import { BUILDING_COLORS } from './types';
+import { DEFAULT_COMBO_FLOW_STATE } from '../game/types';
 
 export class LevelEditorEngine {
   private state: LevelEditorState;
@@ -816,6 +817,15 @@ export class LevelEditorEngine {
         totalDamageTaken: 0,
         avgTension: 0,
         tensionSamples: 0,
+        weatherEvent: 'clear',
+        timeOfDayPhase: 'noon',
+        scoreMultiplier: 1.0,
+        visibility: 1.0,
+        weatherEventDuration: 0,
+        baseScore: 0,
+        weatherBonusScore: 0,
+        lightningNearMiss: 0,
+        comboFlow: { ...DEFAULT_COMBO_FLOW_STATE, hits: [] },
       },
       completedObjectives: [],
       isWin,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import type { GameStats, WeatherEventType, TimeOfDayPhase } from '../game/types';
 
 interface GameHUDProps {
@@ -57,7 +57,32 @@ const TIME_OF_DAY_ICONS: Record<TimeOfDayPhase, string> = {
   night: '🌃',
 };
 
+interface FloatingText {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  color: string;
+  createdAt: number;
+  duration: number;
+  size: number;
+}
+
+const getComboColor = (combo: number): string => {
+  if (combo >= 50) return '#ff0080';
+  if (combo >= 30) return '#ff00ff';
+  if (combo >= 20) return '#ff4040';
+  if (combo >= 10) return '#ff8c00';
+  if (combo >= 5) return '#ffd700';
+  return '#4ecdc4';
+};
+
 export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
+  const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
+  const [comboPulse, setComboPulse] = useState(false);
+  const prevComboRef = useRef(0);
+  const hudRef = useRef<HTMLDivElement>(null);
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -67,6 +92,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
   const heightPercent = Math.min(100, (stats.height / 200) * 100);
   const trackingPercent = Math.floor(stats.shadowTracking * 100);
   const stabilityPercent = Math.floor(stats.flightStability * 100);
+  const comboFlow = stats.comboFlow;
 
   const getTrackingColor = (value: number): string => {
     if (value >= 0.8) return 'linear-gradient(180deg, #ffd700 0%, #ff8c00 100%)';
@@ -99,10 +125,93 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
     return '#888888';
   };
 
+  useEffect(() => {
+    if (comboFlow.combo > prevComboRef.current && comboFlow.combo > 0) {
+      const newCombo = comboFlow.combo;
+
+      if (newCombo % 5 === 0 && newCombo >= 5) {
+        const text: FloatingText = {
+          id: `milestone-${Date.now()}`,
+          text: `🏆 ${newCombo} 连击里程碑!`,
+          x: 50,
+          y: 35,
+          color: '#ffd700',
+          createdAt: Date.now(),
+          duration: 2000,
+          size: 28,
+        };
+        setFloatingTexts((prev) => [...prev, text]);
+      } else if (newCombo >= 3) {
+        const text: FloatingText = {
+          id: `combo-${Date.now()}`,
+          text: `${newCombo} COMBO!`,
+          x: 50 + (Math.random() - 0.5) * 10,
+          y: 40,
+          color: getComboColor(newCombo),
+          createdAt: Date.now(),
+          duration: 1200,
+          size: 24 + Math.min(newCombo, 30) * 0.5,
+        };
+        setFloatingTexts((prev) => [...prev, text]);
+      }
+
+      setComboPulse(true);
+      setTimeout(() => setComboPulse(false), 300);
+    }
+    prevComboRef.current = comboFlow.combo;
+  }, [comboFlow.combo]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setFloatingTexts((prev) =>
+        prev.filter((t) => now - t.createdAt < t.duration)
+      );
+    }, 100);
+    return () => clearInterval(interval);
+  }, []);
+
   const isWeatherEventActive = stats.weatherEvent !== 'clear';
+  const showComboPanel = comboFlow.combo > 0 || comboFlow.totalHits > 0;
 
   return (
-    <div className="game-hud">
+    <div className="game-hud" ref={hudRef}>
+      {floatingTexts.map((ft) => {
+        const elapsed = Date.now() - ft.createdAt;
+        const progress = Math.min(1, elapsed / ft.duration);
+        const easeOut = 1 - Math.pow(1 - progress, 2);
+        const opacity = 1 - progress;
+        const translateY = -easeOut * 80;
+        const scale = 1 + easeOut * 0.2;
+
+        return (
+          <div
+            key={ft.id}
+            className="combo-floating-text"
+            style={{
+              left: `${ft.x}%`,
+              top: `${ft.y}%`,
+              color: ft.color,
+              fontSize: `${ft.size}px`,
+              opacity,
+              transform: `translate(-50%, -50%) translateY(${translateY}px) scale(${scale})`,
+              textShadow: `0 0 20px ${ft.color}, 0 0 40px ${ft.color}55`,
+            }}
+          >
+            {ft.text}
+          </div>
+        );
+      })}
+
+      {comboFlow.combo >= 10 && (
+        <div
+          className={`combo-screen-overlay ${comboPulse ? 'pulse' : ''}`}
+          style={{
+            background: `radial-gradient(circle at center, ${getComboColor(comboFlow.combo)}11 0%, transparent 60%)`,
+          }}
+        />
+      )}
+
       <div className="hud-top">
         <div className="stat-card score-card">
           <div className="stat-label">得分</div>
@@ -117,6 +226,11 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
           )}
           {stats.shadowBonus > 0 && (
             <div className="stat-bonus">+{stats.shadowBonus} 影子追踪</div>
+          )}
+          {comboFlow.totalComboScore > 0 && (
+            <div className="stat-bonus combo-bonus" style={{ color: getComboColor(comboFlow.maxCombo) }}>
+              +{comboFlow.totalComboScore} 连击分
+            </div>
           )}
           {stats.weatherBonusScore > 0 && (
             <div
@@ -181,6 +295,76 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
         </button>
       </div>
 
+      {showComboPanel && (
+        <div
+          className={`combo-panel ${comboPulse ? 'combo-panel-pulse' : ''}`}
+          style={{
+            borderColor: getComboColor(comboFlow.combo),
+            boxShadow: comboFlow.combo >= 5 ? `0 0 30px ${getComboColor(comboFlow.combo)}55, inset 0 0 20px ${getComboColor(comboFlow.combo)}22` : 'none',
+          }}
+        >
+          <div className="combo-panel-header">
+            <span className="combo-panel-icon">⚡</span>
+            <span className="combo-panel-title">连击击穿</span>
+          </div>
+
+          <div className="combo-main-display">
+            <div
+              className="combo-number"
+              style={{
+                color: getComboColor(comboFlow.combo),
+                textShadow: `0 0 20px ${getComboColor(comboFlow.combo)}`,
+              }}
+            >
+              {comboFlow.combo}
+            </div>
+            <div className="combo-label">当前连击</div>
+          </div>
+
+          <div className="combo-stats-row">
+            <div className="combo-stat-item">
+              <div className="combo-stat-value" style={{ color: '#ffd700' }}>
+                x{comboFlow.currentMultiplier.toFixed(1)}
+              </div>
+              <div className="combo-stat-label">连击倍率</div>
+            </div>
+            <div className="combo-stat-divider" />
+            <div className="combo-stat-item">
+              <div className="combo-stat-value" style={{ color: '#4ecdc4' }}>
+                +{comboFlow.comboScore}
+              </div>
+              <div className="combo-stat-label">本轮得分</div>
+            </div>
+            <div className="combo-stat-divider" />
+            <div className="combo-stat-item">
+              <div className="combo-stat-value" style={{ color: '#ff6b6b' }}>
+                {comboFlow.maxCombo}
+              </div>
+              <div className="combo-stat-label">最高连击</div>
+            </div>
+          </div>
+
+          {comboFlow.combo > 0 && (
+            <div className="combo-timer-bar">
+              <div
+                className="combo-timer-fill"
+                style={{
+                  width: `${Math.max(0, 100 - ((Date.now() - comboFlow.lastHitTime) / (comboFlow.comboTimeout * 1000)) * 100)}%`,
+                  background: `linear-gradient(90deg, ${getComboColor(comboFlow.combo)}, #ffffff)`,
+                  boxShadow: `0 0 10px ${getComboColor(comboFlow.combo)}`,
+                }}
+              />
+            </div>
+          )}
+
+          <div className="combo-secondary-stats">
+            <span>完美: {comboFlow.perfectHits}</span>
+            <span>总命中: {comboFlow.totalHits}</span>
+            <span>中断: {comboFlow.comboBreakCount}</span>
+          </div>
+        </div>
+      )}
+
       <div className="hud-left">
         <div className="altitude-meter">
           <div className="meter-label">高度</div>
@@ -211,6 +395,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
             <span className="info-label">气流捕获</span>
             <span className="info-value">{stats.airCurrentCount}</span>
           </div>
+          {showComboPanel && comboFlow.totalHits > 0 && (
+            <div className="info-row info-row-highlight" style={{ borderLeft: `3px solid ${getComboColor(comboFlow.maxCombo)}` }}>
+              <span className="info-label">⚡ 连击击穿</span>
+              <span className="info-value" style={{ color: getComboColor(comboFlow.maxCombo) }}>
+                {comboFlow.maxCombo} 连击
+              </span>
+            </div>
+          )}
           {stats.lightningNearMiss > 0 && (
             <div className="info-row info-row-danger">
               <span className="info-label">⚡闪电擦边</span>
@@ -233,6 +425,20 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
                 style={{ color: getMultiplierColor(stats.scoreMultiplier) }}
               >
                 +{stats.weatherBonusScore}
+              </span>
+            </div>
+          )}
+          {comboFlow.totalComboScore > 0 && (
+            <div
+              className="info-row info-row-highlight"
+              style={{ borderLeft: `3px solid ${getComboColor(comboFlow.maxCombo)}` }}
+            >
+              <span className="info-label">连击击穿奖励</span>
+              <span
+                className="info-value"
+                style={{ color: getComboColor(comboFlow.maxCombo) }}
+              >
+                +{comboFlow.totalComboScore}
               </span>
             </div>
           )}
