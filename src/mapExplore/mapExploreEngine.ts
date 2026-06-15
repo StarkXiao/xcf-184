@@ -345,11 +345,9 @@ export class MapExploreEngine {
 
     regionProgress.totalScoreInRegion += result.totalRewardScore;
 
-    if (result.totalRewardScore > 0) {
-      const newTotalScore = regionProgress.totalScoreInRegion;
-      if (newTotalScore > regionProgress.bestScoreInRegion) {
-        regionProgress.bestScoreInRegion = newTotalScore;
-      }
+    const flightTotalScore = adjustedScore + result.totalRewardScore;
+    if (flightTotalScore > regionProgress.bestScoreInRegion) {
+      regionProgress.bestScoreInRegion = flightTotalScore;
     }
 
     this.recalculateExploration();
@@ -643,7 +641,6 @@ export class MapExploreEngine {
           rewardCoins: stage.rewardCoins,
           rewardScore: stage.rewardScore,
         });
-        result.totalRewardScore += stage.rewardScore;
 
         const stageIdx = region.stageIds.indexOf(stageId);
         if (stageIdx >= 0 && stageIdx < region.stageIds.length - 1) {
