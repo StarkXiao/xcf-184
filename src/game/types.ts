@@ -1,5 +1,56 @@
 export type GameState = 'menu' | 'playing' | 'paused' | 'gameover';
 
+export type WeatherEventType =
+  | 'clear'
+  | 'suddenStorm'
+  | 'goldenHour'
+  | 'morningBreeze'
+  | 'nightFall'
+  | 'denseFog'
+  | 'sunBreak'
+  | 'thunderStorm';
+
+export type TimeOfDayPhase = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'sunset' | 'night';
+
+export interface LightningStrike {
+  id: string;
+  position: Vector3;
+  duration: number;
+  maxDuration: number;
+  intensity: number;
+}
+
+export interface WeatherEventState {
+  currentEvent: WeatherEventType;
+  eventStartTime: number;
+  eventDuration: number;
+  scoreMultiplier: number;
+  turbulenceMultiplier: number;
+  windSpeedMultiplier: number;
+  visibility: number;
+  damageMultiplier: number;
+  isTransitioning: boolean;
+  transitionProgress: number;
+  lightningStrikes: LightningStrike[];
+  activeLightning: LightningStrike | null;
+  fogDensity: number;
+  nextEventCheckTime: number;
+  lastEventEndTime: number;
+  eventHistory: { event: WeatherEventType; startTime: number; endTime: number }[];
+}
+
+export interface WeatherEventConfig {
+  enabled: boolean;
+  eventCheckInterval: number;
+  minEventDuration: number;
+  maxEventDuration: number;
+  minEventCooldown: number;
+  stormProbability: number;
+  goldenHourProbability: number;
+  fogProbability: number;
+  thunderProbability: number;
+}
+
 export interface Vector3 {
   x: number;
   y: number;
@@ -117,6 +168,14 @@ export interface GameStats {
   totalDamageTaken: number;
   avgTension: number;
   tensionSamples: number;
+  weatherEvent: WeatherEventType;
+  timeOfDayPhase: TimeOfDayPhase;
+  scoreMultiplier: number;
+  visibility: number;
+  weatherEventDuration: number;
+  baseScore: number;
+  weatherBonusScore: number;
+  lightningNearMiss: number;
 }
 
 export interface WindFieldConfig {
@@ -138,6 +197,8 @@ export interface WeatherConfig {
   turbulenceLevel: number;
   timeOfDayFrozen: boolean;
   windField?: WindFieldConfig;
+  weatherEventConfig?: WeatherEventConfig;
+  forceWeatherEvent?: WeatherEventType;
 }
 
 export interface FlightParams {
@@ -170,7 +231,20 @@ export interface GameConfig {
   durabilityConfig?: DurabilityConfig;
   tensionConfig?: TensionConfig;
   difficultyPreset?: 'easy' | 'normal' | 'hard' | 'extreme';
+  weatherEventConfig?: WeatherEventConfig;
 }
+
+export const DEFAULT_WEATHER_EVENT_CONFIG: WeatherEventConfig = {
+  enabled: true,
+  eventCheckInterval: 15,
+  minEventDuration: 20,
+  maxEventDuration: 60,
+  minEventCooldown: 30,
+  stormProbability: 0.15,
+  goldenHourProbability: 0.1,
+  fogProbability: 0.1,
+  thunderProbability: 0.08,
+};
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
   worldSize: 500,
@@ -187,6 +261,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   windSpeed: 0.3,
   turbulenceLevel: 0.2,
   cloudCoverage: 0.5,
+  weatherEventConfig: { ...DEFAULT_WEATHER_EVENT_CONFIG },
 };
 
 export const DEFAULT_WIND_FIELD: WindFieldConfig = {
@@ -208,6 +283,7 @@ export const DEFAULT_WEATHER: WeatherConfig = {
   turbulenceLevel: 0.2,
   timeOfDayFrozen: false,
   windField: { ...DEFAULT_WIND_FIELD },
+  weatherEventConfig: { ...DEFAULT_WEATHER_EVENT_CONFIG },
 };
 
 export const DEFAULT_DURABILITY_CONFIG: DurabilityConfig = {

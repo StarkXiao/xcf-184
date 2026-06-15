@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Building, GameConfig } from './types';
+import type { Building, GameConfig, LightningStrike, WeatherEventType } from './types';
 
 export class SceneManager {
   public scene: THREE.Scene;
@@ -10,8 +10,19 @@ export class SceneManager {
   public sunLight!: THREE.DirectionalLight;
   public ambientLight!: THREE.AmbientLight;
   public hemisphereLight!: THREE.HemisphereLight;
+  private lightningLight!: THREE.PointLight;
   private config: GameConfig;
   private buildingGroup: THREE.Group;
+  private lightningMeshes: Map<string, THREE.Group> = new Map();
+  private windowMaterials: THREE.MeshStandardMaterial[] = [];
+  private baseExposure: number = 1.0;
+  private targetExposure: number = 1.0;
+  private baseFogNear: number;
+  private baseFogFar: number;
+  private targetFogNear: number;
+  private targetFogFar: number;
+  private currentWeatherEvent: WeatherEventType = 'clear';
+  private lightningFlashIntensity: number = 0;
 
   constructor(container: HTMLElement, config: GameConfig) {
     this.config = config;
@@ -19,7 +30,11 @@ export class SceneManager {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x87ceeb);
-    this.scene.fog = new THREE.Fog(0x87ceeb, 200, 600);
+    this.baseFogNear = 200;
+    this.baseFogFar = 600;
+    this.targetFogNear = this.baseFogNear;
+    this.targetFogFar = this.baseFogFar;
+    this.scene.fog = new THREE.Fog(0x87ceeb, this.baseFogNear, this.baseFogFar);
 
     this.camera = new THREE.PerspectiveCamera(
       60,
@@ -71,6 +86,10 @@ export class SceneManager {
     this.sunLight.shadow.bias = -0.0005;
     this.sunLight.shadow.normalBias = 0.02;
     this.scene.add(this.sunLight);
+
+    this.lightningLight = new THREE.PointLight(0xaaccff, 0, 500, 2);
+    this.lightningLight.position.set(0, 150, 0);
+    this.scene.add(this.lightningLight);
   }
 
   private initGround(): void {
@@ -198,6 +217,7 @@ export class SceneManager {
       roughness: 0.3,
       metalness: 0.5,
     });
+    this.windowMaterials.push(windowMaterial);
 
     const windowGeometry = new THREE.PlaneGeometry(1.5, 2);
 
@@ -375,11 +395,267 @@ export class SceneManager {
   public reconfigure(config: GameConfig): void {
     this.config = config;
     this.clearBuildings();
+    this.windowMaterials = [];
     this.initBuildings();
 
+    this.baseFogNear = config.worldSize * 0.4;
+    this.baseFogFar = config.worldSize * 1.2;
+    this.targetFogNear = this.baseFogNear;
+    this.targetFogFar = this.baseFogFar;
+
     if (this.scene.fog instanceof THREE.Fog) {
-      this.scene.fog.near = config.worldSize * 0.4;
-      this.scene.fog.far = config.worldSize * 1.2;
+      this.scene.fog.near = this.baseFogNear;
+      this.scene.fog.far = this.baseFogFar;
     }
   }
+
+  public updateWeatherVisuals(
+    delta: number,
+    timeOfDay: number,
+    weatherEvent: WeatherEventType,
+    fogDensity: number,
+    visibility: number,
+    activeLightning: LightningStrike | null
+  ): void {
+    this.currentWeatherEvent = weatherEvent;
+
+    const fogFactor = 1 - fogDensity * 0.7;
+    this.targetFogNear = this.baseFogNear * fogFactor;
+    this.targetFogFar = this.baseFogFar * (0.3 + fogFactor * 0.7);
+
+    if (this.scene.fog instanceof THREE.Fog) {
+      const lerpFactor = Math.min(1, delta * 2);
+      this.scene.fog.near += (this.targetFogNear - this.scene.fog.near) * lerpFactor;
+      this.scene.fog.far += (this.targetFogFar - this.scene.fog.far) * lerpFactor;
+    }
+
+    this.updateExposure(delta, weatherEvent, activeLightning);
+    this.updateWindowLighting(timeOfDay, weatherEvent);
+    this.updateLightning(activeLightning);
+    this.updateHemisphereAndAmbient(weatherEvent, timeOfDay);
+  }
+
+  private updateExposure(
+    delta: number,
+    weatherEvent: WeatherEventType,
+    activeLightning: LightningStrike | null
+  ): void {
+    let target = this.baseExposure;
+
+    switch (weatherEvent) {
+      case 'goldenHour':
+        target = 1.15;
+        break;
+      case 'nightFall':
+        target = 0.85;
+        break;
+      case 'thunderStorm':
+      case 'suddenStorm':
+        target = 0.75;
+        break;
+      case 'denseFog':
+        target = 0.9;
+        break;
+      case 'morningBreeze':
+        target = 1.05;
+        break;
+      case 'sunBreak':
+        target = 1.2;
+        break;
+      default:
+        target = 1.0;
+    }
+
+    if (activeLightning) {
+      const lightningProgress = 1 - activeLightning.duration / activeLightning.maxDuration;
+      const flashIntensity = Math.sin(lightningProgress * Math.PI) * activeLightning.intensity * 2.5;
+      this.lightningFlashIntensity = flashIntensity;
+      target += flashIntensity;
+    } else {
+      this.lightningFlashIntensity = Math.max(0, this.lightningFlashIntensity - delta * 5);
+      target += this.lightningFlashIntensity * 0.3;
+    }
+
+    this.targetExposure = target;
+    const lerpFactor = Math.min(1, delta * 3);
+    this.renderer.toneMappingExposure += (this.targetExposure - this.renderer.toneMappingExposure) * lerpFactor;
+  }
+
+  private updateWindowLighting(timeOfDay: number, weatherEvent: WeatherEventType): void {
+    const isNight = timeOfDay < 0.2 || timeOfDay > 0.9;
+    const isDusk = (timeOfDay > 0.7 && timeOfDay <= 0.9) || (timeOfDay >= 0.15 && timeOfDay < 0.25);
+
+    let baseEmissiveIntensity = 0.2;
+    if (isNight) {
+      baseEmissiveIntensity = 0.8;
+    } else if (isDusk) {
+      baseEmissiveIntensity = 0.5;
+    }
+
+    if (weatherEvent === 'thunderStorm' || weatherEvent === 'suddenStorm' || weatherEvent === 'denseFog') {
+      baseEmissiveIntensity = Math.min(1.0, baseEmissiveIntensity + 0.2);
+    }
+
+    if (weatherEvent === 'nightFall') {
+      baseEmissiveIntensity = 0.9;
+    }
+
+    const emissiveColor = weatherEvent === 'goldenHour' ? new THREE.Color(0xffaa66) : new THREE.Color(0x8b7355);
+
+    this.windowMaterials.forEach((mat) => {
+      mat.emissive.copy(emissiveColor);
+      const lerpFactor = 0.05;
+      mat.emissiveIntensity += (baseEmissiveIntensity - mat.emissiveIntensity) * lerpFactor;
+    });
+  }
+
+  private updateLightning(activeLightning: LightningStrike | null): void {
+    if (activeLightning) {
+      const progress = 1 - activeLightning.duration / activeLightning.maxDuration;
+      const intensity = Math.sin(progress * Math.PI) * activeLightning.intensity * 30;
+      this.lightningLight.intensity = intensity;
+      this.lightningLight.position.set(
+        activeLightning.position.x,
+        activeLightning.position.y,
+        activeLightning.position.z
+      );
+
+      const flicker = 0.8 + Math.random() * 0.4;
+      this.lightningLight.intensity *= flicker;
+
+      this.createLightningMesh(activeLightning);
+    } else {
+      this.lightningLight.intensity *= 0.85;
+      if (this.lightningLight.intensity < 0.01) {
+        this.lightningLight.intensity = 0;
+      }
+      this.clearLightningMeshes();
+    }
+  }
+
+  private createLightningMesh(strike: LightningStrike): void {
+    if (this.lightningMeshes.has(strike.id)) return;
+
+    const group = new THREE.Group();
+    const segments = 8;
+    const startY = strike.position.y;
+    const endY = 5;
+    const startX = strike.position.x;
+    const startZ = strike.position.z;
+
+    const material = new THREE.LineBasicMaterial({
+      color: 0xaaddff,
+      transparent: true,
+      opacity: 0.95,
+      linewidth: 2,
+    });
+
+    let currentX = startX;
+    let currentY = startY;
+    let currentZ = startZ;
+
+    const points: THREE.Vector3[] = [new THREE.Vector3(currentX, currentY, currentZ)];
+
+    for (let i = 1; i <= segments; i++) {
+      const t = i / segments;
+      currentY = startY + (endY - startY) * t;
+      const offsetRange = (1 - t) * 20;
+      currentX += (Math.random() - 0.5) * offsetRange;
+      currentZ += (Math.random() - 0.5) * offsetRange;
+      points.push(new THREE.Vector3(currentX, currentY, currentZ));
+    }
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, material);
+    group.add(line);
+
+    const glowMaterial = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.4,
+    });
+    const glowLine = new THREE.Line(geometry, glowMaterial);
+    group.add(glowLine);
+
+    this.scene.add(group);
+    this.lightningMeshes.set(strike.id, group);
+
+    setTimeout(() => {
+      this.removeLightningMesh(strike.id);
+    }, 400);
+  }
+
+  private removeLightningMesh(id: string): void {
+    const mesh = this.lightningMeshes.get(id);
+    if (mesh) {
+      this.scene.remove(mesh);
+      mesh.traverse((child) => {
+        if (child instanceof THREE.Line) {
+          child.geometry.dispose();
+          if (child.material instanceof THREE.Material) {
+            child.material.dispose();
+          }
+        }
+      });
+      this.lightningMeshes.delete(id);
+    }
+  }
+
+  private clearLightningMeshes(): void {
+    const idsToRemove: string[] = [];
+    this.lightningMeshes.forEach((_, id) => {
+      idsToRemove.push(id);
+    });
+    idsToRemove.forEach((id) => this.removeLightningMesh(id));
+  }
+
+  private updateHemisphereAndAmbient(weatherEvent: WeatherEventType, timeOfDay: number): void {
+    const isNight = timeOfDay < 0.2 || timeOfDay > 0.9;
+
+    let ambientIntensity = 0.4;
+    let hemiIntensity = 0.5;
+    let hemiSkyColor = new THREE.Color(0x87ceeb);
+
+    if (isNight) {
+      ambientIntensity = 0.15;
+      hemiIntensity = 0.2;
+      hemiSkyColor = new THREE.Color(0x0a0a2a);
+    }
+
+    switch (weatherEvent) {
+      case 'thunderStorm':
+      case 'suddenStorm':
+        ambientIntensity *= 0.6;
+        hemiIntensity *= 0.6;
+        hemiSkyColor = new THREE.Color(0x4a4a6a);
+        break;
+      case 'denseFog':
+        ambientIntensity *= 0.8;
+        hemiIntensity *= 0.7;
+        break;
+      case 'goldenHour':
+        ambientIntensity *= 1.1;
+        hemiIntensity *= 1.1;
+        hemiSkyColor = new THREE.Color(0xffaa77);
+        break;
+      case 'nightFall':
+        ambientIntensity = 0.12;
+        hemiIntensity = 0.15;
+        hemiSkyColor = new THREE.Color(0x050520);
+        break;
+      case 'morningBreeze':
+        hemiSkyColor = new THREE.Color(0xaaddff);
+        break;
+      case 'sunBreak':
+        ambientIntensity *= 1.2;
+        hemiIntensity *= 1.2;
+        break;
+    }
+
+    const lerpFactor = 0.03;
+    this.ambientLight.intensity += (ambientIntensity - this.ambientLight.intensity) * lerpFactor;
+    this.hemisphereLight.intensity += (hemiIntensity - this.hemisphereLight.intensity) * lerpFactor;
+    (this.hemisphereLight.color as THREE.Color).lerp(hemiSkyColor, lerpFactor);
+  }
 }
+

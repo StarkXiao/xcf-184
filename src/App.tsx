@@ -92,6 +92,14 @@ const DEFAULT_STATS: GameStats = {
   totalDamageTaken: 0,
   avgTension: 0,
   tensionSamples: 0,
+  weatherEvent: 'clear',
+  timeOfDayPhase: 'noon',
+  scoreMultiplier: 1.0,
+  visibility: 1.0,
+  weatherEventDuration: 0,
+  baseScore: 0,
+  weatherBonusScore: 0,
+  lightningNearMiss: 0,
 };
 
 function App() {

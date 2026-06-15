@@ -1,10 +1,61 @@
 import React from 'react';
-import type { GameStats } from '../game/types';
+import type { GameStats, WeatherEventType, TimeOfDayPhase } from '../game/types';
 
 interface GameHUDProps {
   stats: GameStats;
   onPause: () => void;
 }
+
+const WEATHER_EVENT_NAMES: Record<WeatherEventType, string> = {
+  clear: '晴朗',
+  suddenStorm: '突发风暴',
+  goldenHour: '金色小时',
+  morningBreeze: '清晨微风',
+  nightFall: '夜幕降临',
+  denseFog: '浓雾弥漫',
+  sunBreak: '阳光破云',
+  thunderStorm: '雷暴天气',
+};
+
+const WEATHER_EVENT_ICONS: Record<WeatherEventType, string> = {
+  clear: '☀️',
+  suddenStorm: '🌪️',
+  goldenHour: '🌅',
+  morningBreeze: '🍃',
+  nightFall: '🌙',
+  denseFog: '🌫️',
+  sunBreak: '🌤️',
+  thunderStorm: '⛈️',
+};
+
+const WEATHER_EVENT_COLORS: Record<WeatherEventType, string> = {
+  clear: 'linear-gradient(135deg, #87ceeb 0%, #4a90d9 100%)',
+  suddenStorm: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  goldenHour: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)',
+  morningBreeze: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+  nightFall: 'linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%)',
+  denseFog: 'linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%)',
+  sunBreak: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+  thunderStorm: 'linear-gradient(135deg, #434343 0%, #000000 100%)',
+};
+
+const TIME_OF_DAY_NAMES: Record<TimeOfDayPhase, string> = {
+  dawn: '黎明',
+  morning: '上午',
+  noon: '正午',
+  afternoon: '下午',
+  sunset: '黄昏',
+  night: '夜晚',
+};
+
+const TIME_OF_DAY_ICONS: Record<TimeOfDayPhase, string> = {
+  dawn: '🌄',
+  morning: '🌤️',
+  noon: '☀️',
+  afternoon: '🌞',
+  sunset: '🌇',
+  night: '🌃',
+};
 
 export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
   const formatTime = (seconds: number): string => {
@@ -39,21 +90,80 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
     return 'D';
   };
 
+  const getMultiplierColor = (multiplier: number): string => {
+    if (multiplier >= 2.5) return '#ff4444';
+    if (multiplier >= 2.0) return '#ff8800';
+    if (multiplier >= 1.5) return '#ffcc00';
+    if (multiplier >= 1.2) return '#44ff44';
+    if (multiplier >= 1.0) return '#ffffff';
+    return '#888888';
+  };
+
+  const isWeatherEventActive = stats.weatherEvent !== 'clear';
+
   return (
     <div className="game-hud">
       <div className="hud-top">
         <div className="stat-card score-card">
           <div className="stat-label">得分</div>
           <div className="stat-value">{stats.score.toLocaleString()}</div>
+          {stats.scoreMultiplier > 1.0 && (
+            <div
+              className="stat-bonus multiplier-bonus"
+              style={{ color: getMultiplierColor(stats.scoreMultiplier) }}
+            >
+              x{stats.scoreMultiplier.toFixed(1)} 倍率
+            </div>
+          )}
           {stats.shadowBonus > 0 && (
             <div className="stat-bonus">+{stats.shadowBonus} 影子追踪</div>
+          )}
+          {stats.weatherBonusScore > 0 && (
+            <div
+              className="stat-bonus weather-bonus"
+              style={{ color: getMultiplierColor(stats.scoreMultiplier) }}
+            >
+              +{stats.weatherBonusScore} 天气奖励
+            </div>
           )}
         </div>
 
         <div className="stat-card time-card">
-          <div className="stat-label">时间</div>
+          <div className="stat-label">
+            {TIME_OF_DAY_ICONS[stats.timeOfDayPhase]} {TIME_OF_DAY_NAMES[stats.timeOfDayPhase]}
+          </div>
           <div className="stat-value">{formatTime(stats.time)}</div>
         </div>
+
+        {isWeatherEventActive && (
+          <div
+            className="stat-card weather-event-card"
+            style={{ background: WEATHER_EVENT_COLORS[stats.weatherEvent] }}
+          >
+            <div className="weather-event-header">
+              <span className="weather-event-icon">
+                {WEATHER_EVENT_ICONS[stats.weatherEvent]}
+              </span>
+              <span className="weather-event-name">
+                {WEATHER_EVENT_NAMES[stats.weatherEvent]}
+              </span>
+            </div>
+            {stats.weatherEventDuration > 0 && (
+              <div className="weather-event-timer">
+                剩余 {Math.ceil(stats.weatherEventDuration)}s
+              </div>
+            )}
+            <div className="weather-event-effects">
+              <span className="weather-effect-item">x{stats.scoreMultiplier.toFixed(1)}</span>
+              {stats.visibility < 1.0 && (
+                <span className="weather-effect-item visibility-low">👁 {Math.floor(stats.visibility * 100)}%</span>
+              )}
+              {stats.weatherEvent === 'thunderStorm' && (
+                <span className="weather-effect-item danger">⚡危险</span>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="stat-card tracking-mini-card">
           <div className="stat-label">追踪评级</div>
@@ -101,11 +211,31 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
             <span className="info-label">气流捕获</span>
             <span className="info-value">{stats.airCurrentCount}</span>
           </div>
+          {stats.lightningNearMiss > 0 && (
+            <div className="info-row info-row-danger">
+              <span className="info-label">⚡闪电擦边</span>
+              <span className="info-value">{stats.lightningNearMiss}</span>
+            </div>
+          )}
           <div className="info-divider" />
           <div className="info-row info-row-highlight">
             <span className="info-label">影子追踪奖励</span>
             <span className="info-value info-value-gold">+{stats.shadowBonus}</span>
           </div>
+          {stats.weatherBonusScore > 0 && (
+            <div
+              className="info-row info-row-highlight"
+              style={{ borderLeft: `3px solid ${getMultiplierColor(stats.scoreMultiplier)}` }}
+            >
+              <span className="info-label">天气事件奖励</span>
+              <span
+                className="info-value"
+                style={{ color: getMultiplierColor(stats.scoreMultiplier) }}
+              >
+                +{stats.weatherBonusScore}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

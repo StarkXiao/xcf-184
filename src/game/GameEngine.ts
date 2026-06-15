@@ -130,6 +130,14 @@ export class GameEngine {
       totalDamageTaken: 0,
       avgTension: 0,
       tensionSamples: 0,
+      weatherEvent: 'clear',
+      timeOfDayPhase: 'noon',
+      scoreMultiplier: 1.0,
+      visibility: 1.0,
+      weatherEventDuration: 0,
+      baseScore: 0,
+      weatherBonusScore: 0,
+      lightningNearMiss: 0,
     };
   }
 
@@ -256,14 +264,16 @@ export class GameEngine {
 
     this.flightController.update();
 
+    const damageMultiplier = this.weatherSystem.getDamageMultiplier();
+
     const reelResult = this.kite.adjustStringLength(this.flightController.reelInput, delta);
     if (reelResult.isRapid) {
-      const rapidDamage = this.durabilityConfig.rapidReelDamage * Math.abs(reelResult.reelDelta) * 60;
+      const rapidDamage = this.durabilityConfig.rapidReelDamage * Math.abs(reelResult.reelDelta) * 60 * damageMultiplier;
       this.kite.takeDamage(rapidDamage);
       this.totalDamageTaken += rapidDamage;
     }
 
-    this.weatherSystem.update(delta);
+    this.weatherSystem.update(delta, this.stats.time);
 
     const timeProgress = !this.weatherSystem.config.timeOfDayFrozen
       ? (this.stats.time % 120) / 120
@@ -274,6 +284,40 @@ export class GameEngine {
     }
     this.sceneManager.setSkyColor(timeProgress);
     this.sceneManager.setSunPosition(timeProgress);
+
+    const weatherEventState = this.weatherSystem.getWeatherEventState();
+    this.stats.weatherEvent = weatherEventState.currentEvent;
+    this.stats.timeOfDayPhase = this.weatherSystem.getTimeOfDayPhase(timeProgress);
+    this.stats.scoreMultiplier = weatherEventState.scoreMultiplier;
+    this.stats.visibility = weatherEventState.visibility;
+    this.stats.weatherEventDuration = Math.max(0, weatherEventState.weatherEventDuration);
+
+    const activeLightning = this.weatherSystem.getActiveLightning();
+    this.sceneManager.updateWeatherVisuals(
+      delta,
+      timeProgress,
+      weatherEventState.currentEvent,
+      weatherEventState.fogDensity,
+      weatherEventState.visibility,
+      activeLightning
+    );
+
+    const kitePositionVec = {
+      x: this.kite.group.position.x,
+      y: this.kite.group.position.y,
+      z: this.kite.group.position.z,
+    };
+    const lightningResult = this.weatherSystem.checkLightningHit(kitePositionVec);
+    let lightningDirectHit = false;
+    if (lightningResult.damage > 0) {
+      const actualLightningDamage = this.kite.takeDamage(lightningResult.damage);
+      this.totalDamageTaken += actualLightningDamage;
+      if (!lightningResult.hit) {
+        this.stats.lightningNearMiss++;
+      } else {
+        lightningDirectHit = true;
+      }
+    }
 
     this.shadowTrackingSystem.update(
       delta,
@@ -306,7 +350,7 @@ export class GameEngine {
       delta,
       this.weatherSystem.config.turbulenceLevel
     );
-    this.totalDamageTaken += durabilityResult.tensionDamage + durabilityResult.turbulenceDamage;
+    this.totalDamageTaken += (durabilityResult.tensionDamage + durabilityResult.turbulenceDamage) * damageMultiplier;
 
     const windForce = this.weatherSystem.getWindForce(kiteAltitude);
     this.kite.applyAirCurrent(windForce, this.stats.shadowTracking, this.stats.flightStability);
@@ -344,7 +388,7 @@ export class GameEngine {
       this.kite.group.position.copy(resolved.position);
       this.kite.velocity.copy(resolved.velocity);
       
-      const actualDamage = this.kite.takeDamage(resolved.damage);
+      const actualDamage = this.kite.takeDamage(resolved.damage * damageMultiplier);
       this.totalDamageTaken += actualDamage;
       this.collisions++;
     }
@@ -392,7 +436,7 @@ export class GameEngine {
     );
     this.stats.tensionBonus = tensionBonusScore;
 
-    this.stats.score = Math.floor(
+    const baseScore = Math.floor(
       this.stats.distance * 0.1 +
         this.stats.maxHeight * 2 +
         this.stats.airCurrentCount * 5 +
@@ -403,7 +447,13 @@ export class GameEngine {
         this.collisions * 10 -
         Math.floor(this.totalDamageTaken * 0.5)
     );
-    this.stats.score = Math.max(0, this.stats.score);
+    this.stats.baseScore = Math.max(0, baseScore);
+
+    const scoreMultiplier = weatherEventState.scoreMultiplier;
+    const weatherBonusScore = Math.floor(this.stats.baseScore * (scoreMultiplier - 1));
+    this.stats.weatherBonusScore = Math.max(0, weatherBonusScore);
+
+    this.stats.score = Math.max(0, this.stats.baseScore + this.stats.weatherBonusScore);
 
     let levelWin = false;
     let levelLose = false;
@@ -413,7 +463,9 @@ export class GameEngine {
       levelLose = result.isLose && this.currentLevel.loseCondition.type !== 'crash';
     }
 
-    if (this.kite.durability.current <= 0 || isGroundCollision || levelWin || levelLose) {
+    const instantFailByLightning = lightningDirectHit && weatherEventState.currentEvent === 'thunderStorm';
+
+    if (this.kite.durability.current <= 0 || isGroundCollision || levelWin || levelLose || instantFailByLightning) {
       this.endGame();
       return;
     }
