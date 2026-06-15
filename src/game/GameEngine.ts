@@ -206,7 +206,8 @@ export class GameEngine {
   }
 
   private update(delta: number): void {
-    this.stats.time = (performance.now() - this.startTime) / 1000;
+    const currentTime = performance.now();
+    this.stats.time = (currentTime - this.startTime) / 1000;
 
     this.flightController.update();
 
@@ -264,7 +265,7 @@ export class GameEngine {
       this.stats.airCurrentCount++;
       
       if (this.stageTaskEngine && this.stats.airCurrentCount > this.lastAirCurrentFrameCount) {
-        this.stageTaskEngine.notifyAirCurrentCaught();
+        this.stageTaskEngine.notifyAirCurrentCaught(currentTime);
         this.lastAirCurrentFrameCount = this.stats.airCurrentCount;
       }
     }
@@ -332,7 +333,6 @@ export class GameEngine {
     this.callbacks.onStatsUpdate(this.stats);
 
     if (this.stageTaskEngine && this.state === 'playing') {
-      const currentTime = performance.now();
       const wasActive = this.stageTaskEngine.getProgress().isStageActive;
       this.stageTaskEngine.update(this.stats, delta, currentTime);
       const isActive = this.stageTaskEngine.getProgress().isStageActive;

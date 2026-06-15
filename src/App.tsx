@@ -105,6 +105,7 @@ function App() {
   const flightDataLastSaveTimeRef = useRef<number>(0);
   const levelEditorLevelIdRef = useRef<string | null>(null);
   const stageIdRef = useRef<string | null>(null);
+  const lastSettlementKeyRef = useRef<string | null>(null);
 
   const workshop = useWorkshop();
   const journey = useJourney();
@@ -210,6 +211,13 @@ function App() {
   }, []);
 
   const handleStageComplete = useCallback((settlement: StageSettlement) => {
+    const settlementKey = `${settlement.stageId}-${settlement.totalScore}-${settlement.isFailed}`;
+    
+    if (lastSettlementKeyRef.current === settlementKey) {
+      return;
+    }
+    lastSettlementKeyRef.current = settlementKey;
+
     setStageSettlement(settlement);
     setShowStageSettlement(true);
     
@@ -631,8 +639,10 @@ function App() {
     const weatherConfig = stageTask.getWeatherConfigOverride(stage);
     const airCurrentConfig = stageTask.getAirCurrentConfigOverride(stage);
 
+    const now = performance.now();
     stageIdRef.current = stageId;
-    stageTask.startStage(stageId);
+    lastSettlementKeyRef.current = null;
+    stageTask.startStage(stageId, now);
     setShowStageSelect(false);
     setShowStageSettlement(false);
     setStageSettlement(null);
@@ -662,6 +672,7 @@ function App() {
   const handleQuitStage = () => {
     if (stageIdRef.current) {
       stageIdRef.current = null;
+      lastSettlementKeyRef.current = null;
       stageTask.reset();
       setStageTasks([]);
       setStageProgress(null);

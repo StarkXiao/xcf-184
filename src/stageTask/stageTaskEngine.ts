@@ -76,7 +76,7 @@ export class StageTaskEngine {
     return this.currentStage.tasks.filter(t => !t.completed);
   }
 
-  public startStage(stageId: string): boolean {
+  public startStage(stageId: string, performanceNow: number = performance.now()): boolean {
     const stage = this.stages.find(s => s.id === stageId);
     if (!stage || !stage.unlocked) return false;
 
@@ -85,8 +85,8 @@ export class StageTaskEngine {
     this.progress = {
       currentStageId: stageId,
       currentTaskIndex: 0,
-      stageStartTime: Date.now(),
-      taskStartTime: Date.now(),
+      stageStartTime: performanceNow,
+      taskStartTime: performanceNow,
       comboCount: 0,
       maxCombo: 0,
       totalScoreEarned: 0,
@@ -101,12 +101,12 @@ export class StageTaskEngine {
     this.lastSettlement = null;
 
     this.addAnnouncement({
-      id: `stage-start-${Date.now()}`,
+      id: `stage-start-${performanceNow}`,
       title: `第 ${stage.stageNumber} 关`,
       content: stage.name,
       type: 'stage_start',
       duration: 3000,
-      startTime: Date.now(),
+      startTime: performanceNow,
       priority: 10,
     });
 
@@ -132,7 +132,7 @@ export class StageTaskEngine {
       if (task.completed) return;
       this.checkTaskProgress(task, stats, currentTime);
       if (task.completed && !this.completedTaskIds.has(task.id)) {
-        this.completeTask(task, index);
+        this.completeTask(task, index, currentTime);
       }
     });
 
@@ -233,8 +233,8 @@ export class StageTaskEngine {
     }
   }
 
-  public notifyAirCurrentCaught(): void {
-    const now = Date.now();
+  public notifyAirCurrentCaught(performanceNow: number = performance.now()): void {
+    const now = performanceNow;
     if (now - this.lastAirCurrentTime < 3000) {
       this.progress.comboCount++;
     } else {
@@ -245,18 +245,18 @@ export class StageTaskEngine {
 
     if (this.progress.comboCount >= 5 && this.progress.comboCount % 5 === 0) {
       this.addAnnouncement({
-        id: `combo-${Date.now()}`,
+        id: `combo-${performanceNow}`,
         title: `${this.progress.comboCount} 连击！`,
         content: '气流连击，势不可挡！',
         type: 'bonus',
         duration: 1500,
-        startTime: Date.now(),
+        startTime: performanceNow,
         priority: 5,
       });
     }
   }
 
-  private completeTask(task: StageTask, index: number): void {
+  private completeTask(task: StageTask, index: number, performanceNow: number = performance.now()): void {
     this.completedTaskIds.add(task.id);
     this.progress.totalScoreEarned += task.rewardScore;
     this.progress.totalCoinsEarned += task.rewardCoins;
@@ -267,7 +267,7 @@ export class StageTaskEngine {
       content: `${task.name} +${task.rewardScore}分`,
       type: 'task_complete',
       duration: 2500,
-      startTime: Date.now(),
+      startTime: performanceNow,
       priority: 8,
     });
 
@@ -306,18 +306,14 @@ export class StageTaskEngine {
     }
 
     this.addAnnouncement({
-      id: `stage-complete-${Date.now()}`,
+      id: `stage-complete-${performance.now()}`,
       title: '赛段完成！',
       content: `${this.currentStage.name} 通关成功`,
       type: 'stage_complete',
       duration: 4000,
-      startTime: Date.now(),
+      startTime: performance.now(),
       priority: 10,
     });
-
-    if (this.callbacks.onStageComplete) {
-      this.callbacks.onStageComplete(settlement);
-    }
   }
 
   private failStage(reason: string): void {
@@ -330,25 +326,21 @@ export class StageTaskEngine {
     this.lastSettlement = settlement;
 
     this.addAnnouncement({
-      id: `stage-fail-${Date.now()}`,
+      id: `stage-fail-${performance.now()}`,
       title: '挑战失败',
       content: reason,
       type: 'warning',
       duration: 3000,
-      startTime: Date.now(),
+      startTime: performance.now(),
       priority: 10,
     });
 
     if (this.callbacks.onStageFailed) {
       this.callbacks.onStageFailed(reason);
     }
-
-    if (this.callbacks.onStageComplete) {
-      this.callbacks.onStageComplete(settlement);
-    }
   }
 
-  public calculateSettlement(): StageSettlement {
+  public calculateSettlement(performanceNow: number = performance.now()): StageSettlement {
     if (!this.currentStage) {
       return {
         stageId: '',
@@ -376,7 +368,7 @@ export class StageTaskEngine {
     else if (completionRate >= 0.7) stars = 2;
     else if (completionRate >= 0.4) stars = 1;
 
-    const timeUsed = (Date.now() - this.progress.stageStartTime) / 1000;
+    const timeUsed = (performanceNow - this.progress.stageStartTime) / 1000;
     const timeBonus = this.currentStage.timeLimit
       ? Math.max(0, Math.floor((this.currentStage.timeLimit - timeUsed) * 10))
       : 0;

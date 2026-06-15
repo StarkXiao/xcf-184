@@ -49,8 +49,8 @@ export function useStageTask() {
     return engineRef.current.getAnnouncements();
   }, []);
 
-  const startStage = useCallback((stageId: string): boolean => {
-    const result = engineRef.current.startStage(stageId);
+  const startStage = useCallback((stageId: string, performanceNow?: number): boolean => {
+    const result = engineRef.current.startStage(stageId, performanceNow);
     if (result) {
       emitter.emit();
     }
