@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import type { GameConfig, Vector3, FlightParams } from './types';
+import type { GameConfig, Vector3, FlightParams, KiteDurabilityState, SpoolTensionState, DurabilityConfig, TensionConfig } from './types';
+import { DEFAULT_DURABILITY_CONFIG, DEFAULT_TENSION_CONFIG } from './types';
 
 const DEFAULT_FLIGHT_PARAMS: FlightParams = {
   maxSpeed: 1.2,
@@ -23,12 +24,24 @@ export class Kite {
   private config: GameConfig;
   private flightParams: FlightParams;
   private tailSegments: THREE.Vector3[] = [];
+  private durabilityConfig: DurabilityConfig;
+  private tensionConfig: TensionConfig;
+  public durability: KiteDurabilityState;
+  public tension: SpoolTensionState;
+  private currentStringLength: number = 80;
+  private damageFlashTimer: number = 0;
 
   constructor(config: GameConfig) {
     this.config = config;
     this.flightParams = config.flightParams ?? { ...DEFAULT_FLIGHT_PARAMS };
+    this.durabilityConfig = config.durabilityConfig ?? { ...DEFAULT_DURABILITY_CONFIG };
+    this.tensionConfig = config.tensionConfig ?? { ...DEFAULT_TENSION_CONFIG };
     this.velocity = new THREE.Vector3(0, 0, 0);
     this.rotation = new THREE.Vector3(0, 0, 0);
+
+    this.durability = this.createDurabilityState();
+    this.tension = this.createTensionState();
+    this.currentStringLength = 80;
 
     this.group = new THREE.Group();
     this.mesh = this.createKiteMesh();
@@ -38,6 +51,160 @@ export class Kite {
     this.group.add(this.mesh);
 
     this.group.position.set(0, 80, 0);
+  }
+
+  private createDurabilityState(): KiteDurabilityState {
+    return {
+      current: this.durabilityConfig.maxDurability,
+      max: this.durabilityConfig.maxDurability,
+      criticalThreshold: this.durabilityConfig.criticalThreshold,
+      warningThreshold: this.durabilityConfig.warningThreshold,
+      isCritical: false,
+      isWarning: false,
+    };
+  }
+
+  private createTensionState(): SpoolTensionState {
+    return {
+      current: this.tensionConfig.baseTension,
+      max: this.tensionConfig.maxTension,
+      optimal: this.tensionConfig.optimalTension,
+      criticalThreshold: this.tensionConfig.criticalThreshold,
+      warningThreshold: this.tensionConfig.warningThreshold,
+      isOverTension: false,
+      isUnderTension: false,
+      stringLength: this.currentStringLength,
+      maxStringLength: this.tensionConfig.maxStringLength,
+      minStringLength: this.tensionConfig.minStringLength,
+      reelRate: this.tensionConfig.baseReelRate,
+      tensionDamageRate: this.tensionConfig.tensionDamageRate,
+    };
+  }
+
+  public setDurabilityConfig(config: Partial<DurabilityConfig>): void {
+    this.durabilityConfig = { ...this.durabilityConfig, ...config };
+    this.durability.max = this.durabilityConfig.maxDurability;
+    this.durability.criticalThreshold = this.durabilityConfig.criticalThreshold;
+    this.durability.warningThreshold = this.durabilityConfig.warningThreshold;
+  }
+
+  public setTensionConfig(config: Partial<TensionConfig>): void {
+    this.tensionConfig = { ...this.tensionConfig, ...config };
+    this.tension.max = this.tensionConfig.maxTension;
+    this.tension.optimal = this.tensionConfig.optimalTension;
+    this.tension.criticalThreshold = this.tensionConfig.criticalThreshold;
+    this.tension.warningThreshold = this.tensionConfig.warningThreshold;
+    this.tension.maxStringLength = this.tensionConfig.maxStringLength;
+    this.tension.minStringLength = this.tensionConfig.minStringLength;
+    this.tension.reelRate = this.tensionConfig.baseReelRate;
+    this.tension.tensionDamageRate = this.tensionConfig.tensionDamageRate;
+  }
+
+  public takeDamage(amount: number): number {
+    const actualDamage = amount;
+    this.durability.current = Math.max(0, this.durability.current - actualDamage);
+    this.damageFlashTimer = 0.3;
+    this.updateDurabilityStatus();
+    return actualDamage;
+  }
+
+  public recoverDurability(amount: number): void {
+    this.durability.current = Math.min(this.durability.max, this.durability.current + amount);
+    this.updateDurabilityStatus();
+  }
+
+  private updateDurabilityStatus(): void {
+    this.durability.isCritical = this.durability.current <= this.durability.criticalThreshold;
+    this.durability.isWarning = this.durability.current <= this.durability.warningThreshold;
+  }
+
+  public updateTension(windSpeed: number): void {
+    const speedMagnitude = this.velocity.length();
+    const lengthFactor = this.currentStringLength * this.tensionConfig.tensionPerLength;
+    const speedFactor = speedMagnitude * this.tensionConfig.tensionPerSpeed;
+    const windFactor = windSpeed * this.tensionConfig.tensionPerWind;
+    
+    const targetTension = this.tensionConfig.baseTension + lengthFactor + speedFactor + windFactor;
+    const tensionSmooth = 0.1;
+    this.tension.current = THREE.MathUtils.lerp(this.tension.current, targetTension, tensionSmooth);
+    
+    this.tension.current = Math.max(0, Math.min(this.tension.max, this.tension.current));
+    this.tension.isOverTension = this.tension.current >= this.tension.criticalThreshold;
+    this.tension.isUnderTension = this.tension.current <= 15;
+    this.tension.stringLength = this.currentStringLength;
+  }
+
+  public adjustStringLength(reelInput: number, delta: number): { reelDelta: number; isRapid: boolean } {
+    const reelAmount = reelInput * this.tensionConfig.baseReelRate * delta;
+    const newLength = THREE.MathUtils.clamp(
+      this.currentStringLength + reelAmount,
+      this.tensionConfig.minStringLength,
+      this.tensionConfig.maxStringLength
+    );
+    const actualDelta = newLength - this.currentStringLength;
+    this.currentStringLength = newLength;
+    
+    const isRapid = Math.abs(actualDelta) > this.tensionConfig.rapidReelThreshold * delta;
+    
+    return { reelDelta: actualDelta, isRapid };
+  }
+
+  public updateDurabilityAndTension(delta: number, turbulenceLevel: number = 0): { tensionDamage: number; turbulenceDamage: number; recovery: number } {
+    const tensionDamage = this.tension.isOverTension 
+      ? this.durabilityConfig.highTensionDamage * (this.tension.current / this.tension.max) * delta * 60 
+      : 0;
+    
+    const turbulenceDamage = turbulenceLevel > 0.3 
+      ? this.durabilityConfig.turbulenceDamage * turbulenceLevel * delta * 60 
+      : 0;
+    
+    const totalDamage = tensionDamage + turbulenceDamage;
+    if (totalDamage > 0) {
+      this.takeDamage(totalDamage);
+    }
+    
+    const isStable = !this.tension.isOverTension && !this.tension.isUnderTension && turbulenceLevel < 0.3;
+    const recovery = isStable && this.durability.current < this.durability.max
+      ? this.durabilityConfig.passiveRecoveryRate * delta * 60
+      : 0;
+    if (recovery > 0) {
+      this.recoverDurability(recovery);
+    }
+
+    if (this.damageFlashTimer > 0) {
+      this.damageFlashTimer -= delta;
+      this.updateDamageVisual();
+    }
+
+    return { tensionDamage, turbulenceDamage, recovery };
+  }
+
+  private updateDamageVisual(): void {
+    const flashIntensity = this.damageFlashTimer > 0 ? Math.sin(this.damageFlashTimer * 30) * 0.5 + 0.5 : 0;
+    const sail = this.mesh.children[0] as THREE.Mesh;
+    if (sail && sail.material) {
+      const material = sail.material as THREE.MeshStandardMaterial;
+      material.emissive.setRGB(flashIntensity, 0, 0);
+      material.emissiveIntensity = flashIntensity;
+    }
+  }
+
+  public getStringLength(): number {
+    return this.currentStringLength;
+  }
+
+  public isDurabilityCritical(): boolean {
+    return this.durability.isCritical;
+  }
+
+  public isOverTension(): boolean {
+    return this.tension.isOverTension;
+  }
+
+  public getTensionEfficiency(): number {
+    const diffFromOptimal = Math.abs(this.tension.current - this.tension.optimal);
+    const maxDiff = Math.max(this.tension.optimal, this.tension.max - this.tension.optimal);
+    return Math.max(0.3, 1 - diffFromOptimal / maxDiff);
   }
 
   private createKiteMesh(): THREE.Group {
@@ -175,13 +342,24 @@ export class Kite {
     delta: number,
     flightStability: number = 1,
     trackingScore: number = 0.5
-  ): void {
+  ): { efficiency: number; isDurabilityPenalized: boolean; isTensionPenalized: boolean } {
     const fp = this.flightParams;
 
-    const combinedStability = (0.7 + flightStability * 0.5) * fp.stabilityFactor;
+    const durabilityRatio = this.durability.current / this.durability.max;
+    const tensionEfficiency = this.getTensionEfficiency();
+    
+    const isDurabilityPenalized = durabilityRatio < 0.5;
+    const isTensionPenalized = this.tension.isOverTension || this.tension.isUnderTension;
+    
+    const durabilityPenalty = isDurabilityPenalized ? 0.5 + durabilityRatio * 0.5 : 1;
+    const tensionPenalty = tensionEfficiency;
+    
+    const combinedEfficiency = durabilityPenalty * tensionPenalty;
+
+    const combinedStability = (0.7 + flightStability * 0.5) * fp.stabilityFactor * combinedEfficiency;
     const trackingBoost = 1 + trackingScore * 0.3;
 
-    const effectiveAccel = fp.acceleration * this.config.kiteSpeed * 2;
+    const effectiveAccel = fp.acceleration * this.config.kiteSpeed * 2 * combinedEfficiency;
 
     const acceleration = new THREE.Vector3(
       input.x * effectiveAccel * combinedStability * trackingBoost,
@@ -191,16 +369,17 @@ export class Kite {
 
     this.velocity.add(acceleration.multiplyScalar(delta));
 
-    const liftOffset = fp.liftForce * 1.5;
+    const liftOffset = fp.liftForce * 1.5 * tensionEfficiency;
     const gravityEffect = gravity * (1 - trackingScore * 0.2 - liftOffset);
     this.velocity.y -= gravityEffect;
 
     const baseDrag = fp.dragCoefficient;
     const stabilityDrag = flightStability * 0.015;
-    const dragFactor = Math.min(0.995, baseDrag - stabilityDrag);
+    const tensionDrag = this.tension.isUnderTension ? 0.01 : 0;
+    const dragFactor = Math.min(0.995, baseDrag - stabilityDrag + tensionDrag);
     this.velocity.multiplyScalar(dragFactor);
 
-    const baseMaxSpeed = fp.maxSpeed;
+    const baseMaxSpeed = fp.maxSpeed * combinedEfficiency;
     const stabilityBonus = flightStability * 0.6;
     const trackingBonus = trackingScore * 0.3;
     const maxSpeed = baseMaxSpeed + stabilityBonus + trackingBonus;
@@ -223,12 +402,12 @@ export class Kite {
       Math.min(boundary, this.group.position.z)
     );
 
-    const turnMultiplier = fp.turnRate;
+    const turnMultiplier = fp.turnRate * combinedEfficiency;
     const targetRotationX = -this.velocity.y * 0.5 * turnMultiplier;
     const targetRotationZ = -this.velocity.x * 0.3 * turnMultiplier;
     const targetRotationY = this.velocity.z * 0.2 * turnMultiplier;
 
-    const rotationSmooth = 0.1 * fp.stabilityFactor;
+    const rotationSmooth = 0.1 * fp.stabilityFactor * (isDurabilityPenalized ? 0.7 : 1);
     this.rotation.x += (targetRotationX - this.rotation.x) * rotationSmooth;
     this.rotation.y += (targetRotationY - this.rotation.y) * rotationSmooth;
     this.rotation.z += (targetRotationZ - this.rotation.z) * rotationSmooth;
@@ -241,6 +420,12 @@ export class Kite {
     this.updateShadow();
     this.updateString();
     this.updateTrail();
+
+    return { 
+      efficiency: combinedEfficiency, 
+      isDurabilityPenalized, 
+      isTensionPenalized 
+    };
   }
 
   private updateTail(): void {
@@ -357,5 +542,15 @@ export class Kite {
     this.group.position.set(0, 80, 0);
     this.velocity.set(0, 0, 0);
     this.rotation.set(0, 0, 0);
+    this.currentStringLength = 80;
+    this.damageFlashTimer = 0;
+    this.durability = this.createDurabilityState();
+    this.tension = this.createTensionState();
+    const sail = this.mesh.children[0] as THREE.Mesh;
+    if (sail && sail.material) {
+      const material = sail.material as THREE.MeshStandardMaterial;
+      material.emissive.setRGB(0, 0, 0);
+      material.emissiveIntensity = 0;
+    }
   }
 }

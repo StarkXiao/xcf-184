@@ -13,9 +13,14 @@ import type {
   FlightParams,
   Building,
   AirCurrent,
+  DurabilityConfig,
+  TensionConfig,
 } from './types';
 import {
   DEFAULT_GAME_CONFIG,
+  DEFAULT_DURABILITY_CONFIG,
+  DEFAULT_TENSION_CONFIG,
+  DIFFICULTY_PRESETS,
 } from './types';
 import type { LevelScene, EditorBuilding, EditorAirCurrent } from '../levelEditor/types';
 import type { StageTaskEngine } from '../stageTask/stageTaskEngine';
@@ -57,6 +62,11 @@ export class GameEngine {
   private currentLevel: LevelScene | null = null;
   private stageTaskEngine: StageTaskEngine | null = null;
   private lastAirCurrentFrameCount = 0;
+  private totalDamageTaken = 0;
+  private tensionAccumulator = 0;
+  private tensionSamples = 0;
+  private durabilityConfig: DurabilityConfig;
+  private tensionConfig: TensionConfig;
 
   constructor(
     container: HTMLElement,
@@ -67,7 +77,22 @@ export class GameEngine {
     this.config = config ?? DEFAULT_GAME_CONFIG;
     this.callbacks = callbacks;
 
-    this.stats = {
+    if (this.config.difficultyPreset && DIFFICULTY_PRESETS[this.config.difficultyPreset]) {
+      const preset = DIFFICULTY_PRESETS[this.config.difficultyPreset];
+      this.config = { ...this.config, ...preset };
+    }
+
+    this.durabilityConfig = this.config.durabilityConfig ?? { ...DEFAULT_DURABILITY_CONFIG };
+    this.tensionConfig = this.config.tensionConfig ?? { ...DEFAULT_TENSION_CONFIG };
+
+    this.stats = this.createInitialStats();
+  }
+
+  private createInitialStats(): GameStats {
+    const maxDurability = this.durabilityConfig.maxDurability;
+    const maxTension = this.tensionConfig.maxTension;
+    
+    return {
       score: 0,
       distance: 0,
       height: 80,
@@ -78,6 +103,33 @@ export class GameEngine {
       flightStability: 1,
       shadowBonus: 0,
       collisions: 0,
+      durability: {
+        current: maxDurability,
+        max: maxDurability,
+        criticalThreshold: this.durabilityConfig.criticalThreshold,
+        warningThreshold: this.durabilityConfig.warningThreshold,
+        isCritical: false,
+        isWarning: false,
+      },
+      tension: {
+        current: this.tensionConfig.baseTension,
+        max: maxTension,
+        optimal: this.tensionConfig.optimalTension,
+        criticalThreshold: this.tensionConfig.criticalThreshold,
+        warningThreshold: this.tensionConfig.warningThreshold,
+        isOverTension: false,
+        isUnderTension: false,
+        stringLength: 80,
+        maxStringLength: this.tensionConfig.maxStringLength,
+        minStringLength: this.tensionConfig.minStringLength,
+        reelRate: this.tensionConfig.baseReelRate,
+        tensionDamageRate: this.tensionConfig.tensionDamageRate,
+      },
+      durabilityBonus: 0,
+      tensionBonus: 0,
+      totalDamageTaken: 0,
+      avgTension: 0,
+      tensionSamples: 0,
     };
   }
 
@@ -90,6 +142,7 @@ export class GameEngine {
       this.config
     );
     this.collisionSystem = new CollisionSystem(this.sceneManager.buildings);
+    this.collisionSystem.setDamageConfig(this.durabilityConfig.collisionDamage);
     this.weatherSystem = new WeatherSystem(
       this.sceneManager.scene,
       this.config.worldSize,
@@ -161,22 +214,14 @@ export class GameEngine {
       this.setStartPosition(this.currentLevel.startPosition);
     }
 
-    this.stats = {
-      score: 0,
-      distance: 0,
-      height: 80,
-      time: 0,
-      maxHeight: 80,
-      airCurrentCount: 0,
-      shadowTracking: 0.5,
-      flightStability: 1,
-      shadowBonus: 0,
-      collisions: 0,
-    };
+    this.stats = this.createInitialStats();
 
     this.startPosition.copy(this.kite.group.position);
     this.previousKitePosition.copy(this.kite.group.position);
     this.collisions = 0;
+    this.totalDamageTaken = 0;
+    this.tensionAccumulator = 0;
+    this.tensionSamples = 0;
     this.shadowTrackingAccumulator = 0;
     this.shadowTrackingSamples = 0;
     this.lastAirCurrentFrameCount = 0;
@@ -210,6 +255,13 @@ export class GameEngine {
     this.stats.time = (currentTime - this.startTime) / 1000;
 
     this.flightController.update();
+
+    const reelResult = this.kite.adjustStringLength(this.flightController.reelInput, delta);
+    if (reelResult.isRapid) {
+      const rapidDamage = this.durabilityConfig.rapidReelDamage * Math.abs(reelResult.reelDelta) * 60;
+      this.kite.takeDamage(rapidDamage);
+      this.totalDamageTaken += rapidDamage;
+    }
 
     this.weatherSystem.update(delta);
 
@@ -247,6 +299,29 @@ export class GameEngine {
     );
 
     const kiteAltitude = this.kite.group.position.y;
+    const currentWindSpeed = this.weatherSystem.getCurrentWindSpeed(kiteAltitude);
+    this.kite.updateTension(currentWindSpeed);
+
+    const durabilityResult = this.kite.updateDurabilityAndTension(
+      delta,
+      this.weatherSystem.config.turbulenceLevel
+    );
+    this.totalDamageTaken += durabilityResult.tensionDamage + durabilityResult.turbulenceDamage;
+
+    this.stats.durability = { ...this.kite.durability };
+    this.stats.tension = { ...this.kite.tension };
+
+    this.tensionAccumulator += this.kite.tension.current;
+    this.tensionSamples++;
+    this.stats.avgTension = this.tensionSamples > 0 ? this.tensionAccumulator / this.tensionSamples : 0;
+    this.stats.tensionSamples = this.tensionSamples;
+    this.stats.totalDamageTaken = this.totalDamageTaken;
+
+    if (this.kite.durability.current <= 0) {
+      this.endGame();
+      return;
+    }
+
     const windForce = this.weatherSystem.getWindForce(kiteAltitude);
     this.kite.applyAirCurrent(windForce, this.stats.shadowTracking, this.stats.flightStability);
 
@@ -270,7 +345,10 @@ export class GameEngine {
       }
     }
 
-    const collision = this.collisionSystem.checkKiteCollision(this.kite.group.position);
+    const collision = this.collisionSystem.checkKiteCollision(
+      this.kite.group.position,
+      this.kite.velocity
+    );
     if (collision.collided) {
       const resolved = this.collisionSystem.resolveCollision(
         this.kite.group.position,
@@ -279,6 +357,9 @@ export class GameEngine {
       );
       this.kite.group.position.copy(resolved.position);
       this.kite.velocity.copy(resolved.velocity);
+      
+      const actualDamage = this.kite.takeDamage(resolved.damage);
+      this.totalDamageTaken += actualDamage;
       this.collisions++;
     }
 
@@ -318,13 +399,28 @@ export class GameEngine {
     );
     this.stats.shadowBonus = shadowBonusScore;
 
+    const durabilityRatio = this.stats.durability.current / this.stats.durability.max;
+    const durabilityBonusScore = Math.floor(
+      (this.stats.distance * 0.05 + this.stats.time * 0.5) * durabilityRatio
+    );
+    this.stats.durabilityBonus = durabilityBonusScore;
+
+    const tensionEfficiency = this.kite.getTensionEfficiency();
+    const tensionBonusScore = Math.floor(
+      (this.stats.distance * 0.08 + this.stats.airCurrentCount * 2) * tensionEfficiency
+    );
+    this.stats.tensionBonus = tensionBonusScore;
+
     this.stats.score = Math.floor(
       this.stats.distance * 0.1 +
         this.stats.maxHeight * 2 +
         this.stats.airCurrentCount * 5 +
         shadowBonusScore +
-        this.stats.flightStability * 50 -
-        this.collisions * 10
+        this.stats.flightStability * 50 +
+        durabilityBonusScore +
+        tensionBonusScore -
+        this.collisions * 10 -
+        Math.floor(this.totalDamageTaken * 0.5)
     );
     this.stats.score = Math.max(0, this.stats.score);
     this.stats.collisions = this.collisions;
@@ -379,8 +475,55 @@ export class GameEngine {
     return this.kite?.getFlightParams();
   }
 
+  public setDifficultyPreset(preset: 'easy' | 'normal' | 'hard' | 'extreme'): void {
+    const presetConfig = DIFFICULTY_PRESETS[preset];
+    if (presetConfig) {
+      this.config = { ...this.config, ...presetConfig, difficultyPreset: preset };
+      this.durabilityConfig = this.config.durabilityConfig ?? { ...DEFAULT_DURABILITY_CONFIG };
+      this.tensionConfig = this.config.tensionConfig ?? { ...DEFAULT_TENSION_CONFIG };
+      
+      if (this.kite) {
+        this.kite.setDurabilityConfig(this.durabilityConfig);
+        this.kite.setTensionConfig(this.tensionConfig);
+      }
+      if (this.collisionSystem) {
+        this.collisionSystem.setDamageConfig(this.durabilityConfig.collisionDamage);
+      }
+    }
+  }
+
+  public setDurabilityConfig(config: Partial<DurabilityConfig>): void {
+    this.durabilityConfig = { ...this.durabilityConfig, ...config };
+    if (this.kite) {
+      this.kite.setDurabilityConfig(this.durabilityConfig);
+    }
+    if (this.collisionSystem && config.collisionDamage !== undefined) {
+      this.collisionSystem.setDamageConfig(config.collisionDamage);
+    }
+  }
+
+  public setTensionConfig(config: Partial<TensionConfig>): void {
+    this.tensionConfig = { ...this.tensionConfig, ...config };
+    if (this.kite) {
+      this.kite.setTensionConfig(this.tensionConfig);
+    }
+  }
+
   public reconfigure(config: Partial<GameConfig> & { weatherConfig?: Partial<import('./types').WeatherConfig> }): void {
     this.config = { ...this.config, ...config };
+
+    if (config.difficultyPreset && DIFFICULTY_PRESETS[config.difficultyPreset]) {
+      const preset = DIFFICULTY_PRESETS[config.difficultyPreset];
+      this.config = { ...this.config, ...preset };
+    }
+
+    this.durabilityConfig = this.config.durabilityConfig ?? this.durabilityConfig;
+    this.tensionConfig = this.config.tensionConfig ?? this.tensionConfig;
+
+    if (this.kite) {
+      this.kite.setDurabilityConfig(this.durabilityConfig);
+      this.kite.setTensionConfig(this.tensionConfig);
+    }
 
     this.sceneManager.reconfigure(this.config);
     this.airCurrentSystem.reconfigure(config);
@@ -394,6 +537,7 @@ export class GameEngine {
     this.weatherSystem.reconfigure(this.config.worldSize, weatherConfig);
 
     this.collisionSystem = new CollisionSystem(this.sceneManager.buildings);
+    this.collisionSystem.setDamageConfig(this.durabilityConfig.collisionDamage);
     this.shadowTrackingSystem.clear();
     this.shadowTrackingSystem = new ShadowTrackingSystem(
       this.sceneManager.scene,
@@ -451,6 +595,9 @@ export class GameEngine {
       altitude: kiteAltitude,
       stability: this.stats.flightStability,
       shadowTracking: this.stats.shadowTracking,
+      durability: this.stats.durability.current,
+      tension: this.stats.tension.current,
+      stringLength: this.stats.tension.stringLength,
     };
   }
 

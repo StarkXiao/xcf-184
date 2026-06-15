@@ -5,28 +5,41 @@ export interface CollisionResult {
   collided: boolean;
   normal: THREE.Vector3;
   penetration: number;
+  damage: number;
+  impactVelocity: number;
 }
 
 export class CollisionSystem {
   private buildings: { mesh: THREE.Mesh; data: Building }[];
+  private collisionDamageMultiplier: number = 1.0;
+  private baseCollisionDamage: number = 25;
 
   constructor(buildings: { mesh: THREE.Mesh; data: Building }[]) {
     this.buildings = buildings;
   }
 
+  public setDamageConfig(baseDamage: number, multiplier: number = 1.0): void {
+    this.baseCollisionDamage = baseDamage;
+    this.collisionDamageMultiplier = multiplier;
+  }
+
   public checkKiteCollision(
     kitePosition: THREE.Vector3,
+    kiteVelocity: THREE.Vector3,
     kiteRadius: number = 3
   ): CollisionResult {
     let result: CollisionResult = {
       collided: false,
       normal: new THREE.Vector3(0, 1, 0),
       penetration: 0,
+      damage: 0,
+      impactVelocity: 0,
     };
 
     for (const building of this.buildings) {
       const collision = this.checkBoxCollision(
         kitePosition,
+        kiteVelocity,
         kiteRadius,
         building.data.position,
         building.data.width,
@@ -45,6 +58,7 @@ export class CollisionSystem {
 
   private checkBoxCollision(
     kitePos: THREE.Vector3,
+    kiteVel: THREE.Vector3,
     kiteRadius: number,
     boxCenter: { x: number; y: number; z: number },
     boxWidth: number,
@@ -83,10 +97,16 @@ export class CollisionSystem {
         distanceZ / (distance || 1)
       );
 
+      const impactVelocity = Math.abs(kiteVel.dot(normal));
+      const speedFactor = Math.min(2, impactVelocity * 0.5);
+      const damage = this.baseCollisionDamage * (0.5 + speedFactor * 0.5) * this.collisionDamageMultiplier;
+
       return {
         collided: true,
         normal,
         penetration: kiteRadius - distance,
+        damage,
+        impactVelocity,
       };
     }
 
@@ -94,6 +114,8 @@ export class CollisionSystem {
       collided: false,
       normal: new THREE.Vector3(0, 1, 0),
       penetration: 0,
+      damage: 0,
+      impactVelocity: 0,
     };
   }
 
@@ -101,19 +123,21 @@ export class CollisionSystem {
     kitePosition: THREE.Vector3,
     kiteVelocity: THREE.Vector3,
     collision: CollisionResult
-  ): { position: THREE.Vector3; velocity: THREE.Vector3 } {
+  ): { position: THREE.Vector3; velocity: THREE.Vector3; damage: number } {
     const newPosition = kitePosition
       .clone()
       .add(collision.normal.multiplyScalar(collision.penetration * 1.5));
 
+    const bounceFactor = 0.3 + (collision.damage / this.baseCollisionDamage) * 0.2;
     const reflection = kiteVelocity
       .clone()
       .reflect(collision.normal)
-      .multiplyScalar(0.4);
+      .multiplyScalar(bounceFactor);
 
     return {
       position: newPosition,
       velocity: reflection,
+      damage: collision.damage,
     };
   }
 

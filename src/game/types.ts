@@ -48,6 +48,57 @@ export interface Cloud {
   speed: number;
 }
 
+export interface KiteDurabilityState {
+  current: number;
+  max: number;
+  criticalThreshold: number;
+  warningThreshold: number;
+  isCritical: boolean;
+  isWarning: boolean;
+}
+
+export interface SpoolTensionState {
+  current: number;
+  max: number;
+  optimal: number;
+  criticalThreshold: number;
+  warningThreshold: number;
+  isOverTension: boolean;
+  isUnderTension: boolean;
+  stringLength: number;
+  maxStringLength: number;
+  minStringLength: number;
+  reelRate: number;
+  tensionDamageRate: number;
+}
+
+export interface DurabilityConfig {
+  maxDurability: number;
+  collisionDamage: number;
+  turbulenceDamage: number;
+  rapidReelDamage: number;
+  highTensionDamage: number;
+  passiveRecoveryRate: number;
+  criticalThreshold: number;
+  warningThreshold: number;
+}
+
+export interface TensionConfig {
+  maxTension: number;
+  optimalTension: number;
+  criticalThreshold: number;
+  warningThreshold: number;
+  baseTension: number;
+  tensionPerLength: number;
+  tensionPerSpeed: number;
+  tensionPerWind: number;
+  maxStringLength: number;
+  minStringLength: number;
+  baseReelRate: number;
+  rapidReelThreshold: number;
+  tensionDamageRate: number;
+}
+
 export interface GameStats {
   score: number;
   distance: number;
@@ -59,6 +110,13 @@ export interface GameStats {
   flightStability: number;
   shadowBonus: number;
   collisions: number;
+  durability: KiteDurabilityState;
+  tension: SpoolTensionState;
+  durabilityBonus: number;
+  tensionBonus: number;
+  totalDamageTaken: number;
+  avgTension: number;
+  tensionSamples: number;
 }
 
 export interface WindFieldConfig {
@@ -109,6 +167,9 @@ export interface GameConfig {
   turbulenceLevel: number;
   cloudCoverage: number;
   flightParams?: FlightParams;
+  durabilityConfig?: DurabilityConfig;
+  tensionConfig?: TensionConfig;
+  difficultyPreset?: 'easy' | 'normal' | 'hard' | 'extreme';
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
@@ -147,4 +208,100 @@ export const DEFAULT_WEATHER: WeatherConfig = {
   turbulenceLevel: 0.2,
   timeOfDayFrozen: false,
   windField: { ...DEFAULT_WIND_FIELD },
+};
+
+export const DEFAULT_DURABILITY_CONFIG: DurabilityConfig = {
+  maxDurability: 100,
+  collisionDamage: 25,
+  turbulenceDamage: 0.3,
+  rapidReelDamage: 0.2,
+  highTensionDamage: 0.4,
+  passiveRecoveryRate: 0.05,
+  criticalThreshold: 20,
+  warningThreshold: 50,
+};
+
+export const DEFAULT_TENSION_CONFIG: TensionConfig = {
+  maxTension: 100,
+  optimalTension: 50,
+  criticalThreshold: 85,
+  warningThreshold: 70,
+  baseTension: 20,
+  tensionPerLength: 0.15,
+  tensionPerSpeed: 0.8,
+  tensionPerWind: 15,
+  maxStringLength: 200,
+  minStringLength: 30,
+  baseReelRate: 8,
+  rapidReelThreshold: 15,
+  tensionDamageRate: 0.15,
+};
+
+export const DIFFICULTY_PRESETS: Record<string, Partial<GameConfig>> = {
+  easy: {
+    durabilityConfig: {
+      ...DEFAULT_DURABILITY_CONFIG,
+      maxDurability: 150,
+      collisionDamage: 15,
+      turbulenceDamage: 0.15,
+      highTensionDamage: 0.2,
+      passiveRecoveryRate: 0.1,
+      criticalThreshold: 30,
+      warningThreshold: 60,
+    },
+    tensionConfig: {
+      ...DEFAULT_TENSION_CONFIG,
+      maxTension: 120,
+      criticalThreshold: 95,
+      warningThreshold: 80,
+      tensionDamageRate: 0.08,
+    },
+  },
+  normal: {
+    durabilityConfig: { ...DEFAULT_DURABILITY_CONFIG },
+    tensionConfig: { ...DEFAULT_TENSION_CONFIG },
+  },
+  hard: {
+    durabilityConfig: {
+      ...DEFAULT_DURABILITY_CONFIG,
+      maxDurability: 80,
+      collisionDamage: 35,
+      turbulenceDamage: 0.5,
+      highTensionDamage: 0.6,
+      passiveRecoveryRate: 0.03,
+      criticalThreshold: 25,
+      warningThreshold: 55,
+    },
+    tensionConfig: {
+      ...DEFAULT_TENSION_CONFIG,
+      maxTension: 90,
+      optimalTension: 45,
+      criticalThreshold: 75,
+      warningThreshold: 60,
+      tensionDamageRate: 0.25,
+    },
+  },
+  extreme: {
+    durabilityConfig: {
+      ...DEFAULT_DURABILITY_CONFIG,
+      maxDurability: 60,
+      collisionDamage: 50,
+      turbulenceDamage: 0.8,
+      highTensionDamage: 1.0,
+      passiveRecoveryRate: 0.01,
+      criticalThreshold: 30,
+      warningThreshold: 60,
+    },
+    tensionConfig: {
+      ...DEFAULT_TENSION_CONFIG,
+      maxTension: 80,
+      optimalTension: 40,
+      criticalThreshold: 65,
+      warningThreshold: 50,
+      tensionDamageRate: 0.4,
+      tensionPerLength: 0.2,
+      tensionPerSpeed: 1.2,
+      tensionPerWind: 25,
+    },
+  },
 };

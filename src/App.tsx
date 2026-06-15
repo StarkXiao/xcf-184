@@ -65,6 +65,33 @@ const DEFAULT_STATS: GameStats = {
   flightStability: 1,
   shadowBonus: 0,
   collisions: 0,
+  durability: {
+    current: 100,
+    max: 100,
+    criticalThreshold: 20,
+    warningThreshold: 50,
+    isCritical: false,
+    isWarning: false,
+  },
+  tension: {
+    current: 20,
+    max: 100,
+    optimal: 50,
+    criticalThreshold: 85,
+    warningThreshold: 70,
+    isOverTension: false,
+    isUnderTension: false,
+    stringLength: 80,
+    maxStringLength: 200,
+    minStringLength: 30,
+    reelRate: 8,
+    tensionDamageRate: 0.15,
+  },
+  durabilityBonus: 0,
+  tensionBonus: 0,
+  totalDamageTaken: 0,
+  avgTension: 0,
+  tensionSamples: 0,
 };
 
 function App() {
@@ -100,12 +127,14 @@ function App() {
   const [stageProgress, setStageProgress] = useState<StageProgress | null>(null);
   const [stageSettlement, setStageSettlement] = useState<StageSettlement | null>(null);
   const [showStageSettlement, setShowStageSettlement] = useState(false);
+  const [difficulty, setDifficulty] = useState<'easy' | 'normal' | 'hard' | 'extreme'>('normal');
   const [, setForceUpdate] = useState(0);
   const flightDataPointsRef = useRef<FlightDataPoint[]>([]);
   const flightDataLastSaveTimeRef = useRef<number>(0);
   const levelEditorLevelIdRef = useRef<string | null>(null);
   const stageIdRef = useRef<string | null>(null);
   const lastSettlementKeyRef = useRef<string | null>(null);
+  const difficultyRef = useRef<'easy' | 'normal' | 'hard' | 'extreme'>('normal');
 
   const workshop = useWorkshop();
   const journey = useJourney();
@@ -146,6 +175,17 @@ function App() {
   useEffect(() => {
     gameStateRef.current = gameState;
   }, [gameState]);
+
+  useEffect(() => {
+    difficultyRef.current = difficulty;
+    if (gameEngineRef.current && isInitialized) {
+      gameEngineRef.current.setDifficultyPreset(difficulty);
+    }
+  }, [difficulty, isInitialized]);
+
+  const handleDifficultyChange = useCallback((newDifficulty: 'easy' | 'normal' | 'hard' | 'extreme') => {
+    setDifficulty(newDifficulty);
+  }, []);
 
   const handleStatsUpdate = useCallback((newStats: GameStats) => {
     setStats(newStats);
@@ -477,6 +517,7 @@ function App() {
     const initialConfig = {
       ...DEFAULT_GAME_CONFIG,
       flightParams: workshop.flightParams,
+      difficultyPreset: difficulty,
     };
 
     const engine = new GameEngine(
@@ -500,7 +541,7 @@ function App() {
       engine.destroy();
       gameEngineRef.current = null;
     };
-  }, [handleStatsUpdate, handleStateChange, handleGameOver, isInitialized, workshop.flightParams]);
+  }, [handleStatsUpdate, handleStateChange, handleGameOver, isInitialized, workshop.flightParams, difficulty]);
 
   useEffect(() => {
     if (gameEngineRef.current && isInitialized) {
@@ -1004,6 +1045,8 @@ function App() {
           onMapExplore={handleOpenMapExplore}
           onReplay={handleOpenReplay}
           onStageChallenge={handleOpenStageSelect}
+          difficulty={difficulty}
+          onDifficultyChange={handleDifficultyChange}
         />
       )}
 

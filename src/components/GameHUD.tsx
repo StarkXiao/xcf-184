@@ -143,6 +143,85 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
           </div>
         </div>
       </div>
+
+      <div className="hud-bottom-secondary">
+        <div className="durability-indicator">
+          <div className="indicator-header">
+            <span className="indicator-label">
+              🛡️ 风筝耐久
+              {stats.durability.isCritical && <span className="warning-blink"> 危险!</span>}
+              {stats.durability.isWarning && !stats.durability.isCritical && <span className="warning-text"> 警告</span>}
+            </span>
+            <span className="indicator-value">
+              {Math.floor(stats.durability.current)}/{stats.durability.max}
+            </span>
+          </div>
+          <div className="indicator-bar">
+            <div
+              className="indicator-fill"
+              style={{
+                width: `${(stats.durability.current / stats.durability.max) * 100}%`,
+                background: getDurabilityColor(stats.durability.current / stats.durability.max),
+              }}
+            />
+          </div>
+          {stats.durabilityBonus > 0 && (
+            <div className="indicator-bonus">+{stats.durabilityBonus} 耐久奖励</div>
+          )}
+        </div>
+
+        <div className="tension-indicator">
+          <div className="indicator-header">
+            <span className="indicator-label">
+              🧵 线轴张力
+              {stats.tension.isOverTension && <span className="warning-blink"> 过紧!</span>}
+              {stats.tension.isUnderTension && <span className="warning-text"> 过松</span>}
+            </span>
+            <span className="indicator-value">
+              {Math.floor(stats.tension.current)}/{stats.tension.max}
+            </span>
+          </div>
+          <div className="indicator-bar">
+            <div 
+              className="tension-optimal-marker"
+              style={{ left: `${(stats.tension.optimal / stats.tension.max) * 100}%` }}
+            />
+            <div
+              className="indicator-fill"
+              style={{
+                width: `${(stats.tension.current / stats.tension.max) * 100}%`,
+                background: getTensionColor(stats.tension.current, stats.tension.optimal, stats.tension.max),
+              }}
+            />
+          </div>
+          <div className="tension-info">
+            <span>线长: {Math.floor(stats.tension.stringLength)}m</span>
+            <span>|</span>
+            <span>R/F 收放线</span>
+          </div>
+          {stats.tensionBonus > 0 && (
+            <div className="indicator-bonus">+{stats.tensionBonus} 张力奖励</div>
+          )}
+        </div>
+      </div>
     </div>
   );
+};
+
+const getDurabilityColor = (value: number): string => {
+  if (value <= 0.2) return 'linear-gradient(180deg, #ff0000 0%, #8b0000 100%)';
+  if (value <= 0.5) return 'linear-gradient(180deg, #ff6b00 0%, #cc5500 100%)';
+  if (value <= 0.75) return 'linear-gradient(180deg, #ffc107 0%, #e0a800 100%)';
+  return 'linear-gradient(180deg, #00ff88 0%, #00b85c 100%)';
+};
+
+const getTensionColor = (current: number, optimal: number, max: number): string => {
+  const diff = Math.abs(current - optimal);
+  const maxDiff = Math.max(optimal, max - optimal);
+  const efficiency = Math.max(0, 1 - diff / maxDiff);
+  
+  if (efficiency >= 0.8) return 'linear-gradient(180deg, #00ff88 0%, #00b85c 100%)';
+  if (efficiency >= 0.5) return 'linear-gradient(180deg, #00c6ff 0%, #0072ff 100%)';
+  if (current > optimal) return 'linear-gradient(180deg, #ff6b00 0%, #cc5500 100%)';
+  return 'linear-gradient(180deg, #f7971e 0%, #ffd200 100%)';
 };
