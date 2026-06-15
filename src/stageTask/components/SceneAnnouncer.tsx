@@ -6,12 +6,12 @@ interface SceneAnnouncerProps {
 }
 
 export const SceneAnnouncer: React.FC<SceneAnnouncerProps> = ({ announcements }) => {
-  const [, setTick] = useState(0);
+  const [now, setNow] = useState(performance.now());
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
     const animate = () => {
-      setTick(t => t + 1);
+      setNow(performance.now());
       animationRef.current = requestAnimationFrame(animate);
     };
     
@@ -27,6 +27,7 @@ export const SceneAnnouncer: React.FC<SceneAnnouncerProps> = ({ announcements })
   }, [announcements.length]);
 
   const visibleAnnouncements = announcements
+    .filter(a => now - a.startTime < a.duration)
     .sort((a, b) => b.priority - a.priority)
     .slice(0, 3);
 
@@ -81,7 +82,7 @@ export const SceneAnnouncer: React.FC<SceneAnnouncerProps> = ({ announcements })
   return (
     <div className="scene-announcer">
       {visibleAnnouncements.map((announcement, index) => {
-        const elapsed = Date.now() - announcement.startTime;
+        const elapsed = now - announcement.startTime;
         const progress = Math.min(1, elapsed / announcement.duration);
         const opacity = progress < 0.1
           ? progress / 0.1

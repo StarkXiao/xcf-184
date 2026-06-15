@@ -13,12 +13,12 @@ export const StageTaskHUD: React.FC<StageTaskHUDProps> = ({
   progress,
   tasks,
 }) => {
-  const [, setTick] = useState(0);
+  const [now, setNow] = useState(performance.now());
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
     const animate = () => {
-      setTick(t => t + 1);
+      setNow(performance.now());
       animationRef.current = requestAnimationFrame(animate);
     };
     
@@ -37,7 +37,7 @@ export const StageTaskHUD: React.FC<StageTaskHUDProps> = ({
 
   const completedCount = tasks.filter(t => t.completed).length;
   const timeRemaining = currentStage.timeLimit
-    ? Math.max(0, currentStage.timeLimit - (Date.now() - progress.stageStartTime) / 1000)
+    ? Math.max(0, currentStage.timeLimit - (now - progress.stageStartTime) / 1000)
     : null;
 
   const formatTime = (seconds: number): string => {

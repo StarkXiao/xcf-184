@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Stage, StageProgress, StageTask } from '../types';
 
 interface PauseSettlementProps {
@@ -18,6 +18,15 @@ export const PauseSettlement: React.FC<PauseSettlementProps> = ({
   onRestart,
   onQuit,
 }) => {
+  const [now, setNow] = useState(performance.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(performance.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   if (!currentStage) return null;
 
   const completedTasks = tasks.filter(t => t.completed).length;
@@ -30,7 +39,7 @@ export const PauseSettlement: React.FC<PauseSettlementProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const timeElapsed = (Date.now() - progress.stageStartTime) / 1000;
+  const timeElapsed = (now - progress.stageStartTime) / 1000;
   const timeRemaining = currentStage.timeLimit
     ? Math.max(0, currentStage.timeLimit - timeElapsed)
     : null;
