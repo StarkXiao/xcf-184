@@ -28,6 +28,7 @@ export class StageTaskEngine {
   private currentShadowTrackingHigh: boolean = false;
   private currentStabilityHigh: boolean = false;
   private completedTaskIds: Set<string> = new Set();
+  private lastSettlement: StageSettlement | null = null;
 
   constructor(callbacks: StageTaskCallbacks = {}) {
     this.callbacks = callbacks;
@@ -97,6 +98,7 @@ export class StageTaskEngine {
     this.currentShadowTrackingHigh = false;
     this.currentStabilityHigh = false;
     this.announcements = [];
+    this.lastSettlement = null;
 
     this.addAnnouncement({
       id: `stage-start-${Date.now()}`,
@@ -284,6 +286,7 @@ export class StageTaskEngine {
 
     this.progress.isStageActive = false;
     const settlement = this.calculateSettlement();
+    this.lastSettlement = settlement;
 
     const stageIndex = this.stages.findIndex(s => s.id === this.currentStage!.id);
     if (stageIndex >= 0) {
@@ -321,6 +324,10 @@ export class StageTaskEngine {
     if (!this.progress.isStageActive) return;
 
     this.progress.isStageActive = false;
+    const settlement = this.calculateSettlement();
+    settlement.isFailed = true;
+    settlement.failReason = reason;
+    this.lastSettlement = settlement;
 
     this.addAnnouncement({
       id: `stage-fail-${Date.now()}`,
@@ -334,6 +341,10 @@ export class StageTaskEngine {
 
     if (this.callbacks.onStageFailed) {
       this.callbacks.onStageFailed(reason);
+    }
+
+    if (this.callbacks.onStageComplete) {
+      this.callbacks.onStageComplete(settlement);
     }
   }
 
@@ -352,6 +363,7 @@ export class StageTaskEngine {
         timeUsed: 0,
         maxCombo: 0,
         isNewRecord: false,
+        isFailed: false,
       };
     }
 
@@ -393,6 +405,7 @@ export class StageTaskEngine {
       timeUsed,
       maxCombo: this.progress.maxCombo,
       isNewRecord,
+      isFailed: false,
     };
   }
 
@@ -412,8 +425,7 @@ export class StageTaskEngine {
   }
 
   public getStageSettlement(): StageSettlement | null {
-    if (this.progress.isStageActive) return null;
-    return this.calculateSettlement();
+    return this.lastSettlement;
   }
 
   public reset(): void {
@@ -431,6 +443,7 @@ export class StageTaskEngine {
       isStageActive: false,
     };
     this.announcements = [];
+    this.lastSettlement = null;
   }
 
   public getWeatherConfigOverride(stage: Stage): {

@@ -34,21 +34,27 @@ export const StageSettlementScreen: React.FC<StageSettlementScreenProps> = ({
     <div className="menu-overlay stage-settlement-overlay">
       <div className="menu-content stage-settlement-content">
         <div className="settlement-header">
-          <h2 className="settlement-title">
-            {settlement.stars > 0 ? '🎉 挑战成功！' : '挑战结束'}
+          <h2 className={`settlement-title ${settlement.isFailed ? 'failed' : ''}`}>
+            {settlement.isFailed ? '💔 挑战失败' : settlement.stars > 0 ? '🎉 挑战成功！' : '挑战结束'}
           </h2>
           <p className="settlement-stage-name">{settlement.stageName}</p>
         </div>
 
+        {settlement.isFailed && settlement.failReason && (
+          <div className="fail-reason">
+            ⚠️ {settlement.failReason}
+          </div>
+        )}
+
         <div className="stars-display">
           {stars.map((star, index) => (
-            <span key={index} className={`star ${star}`}>
+            <span key={index} className={`star ${star} ${settlement.isFailed ? 'dimmed' : ''}`}>
               ★
             </span>
           ))}
         </div>
 
-        {settlement.isNewRecord && (
+        {settlement.isNewRecord && !settlement.isFailed && (
           <div className="new-record-badge">
             🏆 新纪录！
           </div>

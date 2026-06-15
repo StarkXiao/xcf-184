@@ -1016,7 +1016,20 @@ function App() {
 
       {gameState === 'paused' && (
         <>
-          {stageIdRef.current && stageProgress ? (
+          {showStageSettlement && stageSettlement ? (
+            <StageSettlementScreen
+              settlement={stageSettlement}
+              tasks={stageTasks}
+              onRestart={() => handleStartStage(stageSettlement.stageId)}
+              onNextStage={handleNextStage}
+              onMainMenu={handleQuitStage}
+              hasNextStage={
+                !stageSettlement.isFailed &&
+                stageSettlement.stars > 0 &&
+                stageTask.getStages().findIndex(s => s.id === stageSettlement.stageId) < stageTask.getStages().length - 1
+              }
+            />
+          ) : stageIdRef.current && stageProgress ? (
             <PauseSettlement
               currentStage={stageTask.getCurrentStage()}
               progress={stageProgress}

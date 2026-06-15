@@ -333,7 +333,17 @@ export class GameEngine {
 
     if (this.stageTaskEngine && this.state === 'playing') {
       const currentTime = performance.now();
+      const wasActive = this.stageTaskEngine.getProgress().isStageActive;
       this.stageTaskEngine.update(this.stats, delta, currentTime);
+      const isActive = this.stageTaskEngine.getProgress().isStageActive;
+      
+      if (wasActive && !isActive) {
+        const settlement = this.stageTaskEngine.getStageSettlement();
+        if (settlement && this.callbacks.onStageComplete) {
+          this.callbacks.onStageComplete(settlement);
+        }
+        this.pause();
+      }
       
       if (this.callbacks.onStageTaskUpdate) {
         this.callbacks.onStageTaskUpdate(

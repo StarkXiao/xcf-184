@@ -727,9 +727,24 @@
   margin-bottom: 4px;
 }
 
+.settlement-title.failed {
+  color: #ff6b6b;
+}
+
 .settlement-stage-name {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.5);
+}
+
+.fail-reason {
+  text-align: center;
+  padding: 12px 20px;
+  background: rgba(255, 107, 107, 0.15);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 10px;
+  font-size: 14px;
+  color: #ff6b6b;
+  margin-bottom: 20px;
 }
 
 .stars-display {
@@ -752,6 +767,10 @@
 
 .star.star-empty {
   color: rgba(255, 255, 255, 0.15);
+}
+
+.star.dimmed {
+  opacity: 0.3;
 }
 
 @keyframes starPop {

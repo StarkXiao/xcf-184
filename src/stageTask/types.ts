@@ -79,6 +79,8 @@ export interface StageSettlement {
   timeUsed: number;
   maxCombo: number;
   isNewRecord: boolean;
+  isFailed: boolean;
+  failReason?: string;
 }
 
 export const TASK_TYPE_NAMES: Record<TaskType, string> = {
