@@ -308,20 +308,6 @@ export class GameEngine {
     );
     this.totalDamageTaken += durabilityResult.tensionDamage + durabilityResult.turbulenceDamage;
 
-    this.stats.durability = { ...this.kite.durability };
-    this.stats.tension = { ...this.kite.tension };
-
-    this.tensionAccumulator += this.kite.tension.current;
-    this.tensionSamples++;
-    this.stats.avgTension = this.tensionSamples > 0 ? this.tensionAccumulator / this.tensionSamples : 0;
-    this.stats.tensionSamples = this.tensionSamples;
-    this.stats.totalDamageTaken = this.totalDamageTaken;
-
-    if (this.kite.durability.current <= 0) {
-      this.endGame();
-      return;
-    }
-
     const windForce = this.weatherSystem.getWindForce(kiteAltitude);
     this.kite.applyAirCurrent(windForce, this.stats.shadowTracking, this.stats.flightStability);
 
@@ -363,22 +349,7 @@ export class GameEngine {
       this.collisions++;
     }
 
-    if (this.collisionSystem.checkGroundCollision(this.kite.group.position)) {
-      this.endGame();
-      return;
-    }
-
-    if (this.currentLevel) {
-      const result = this.checkWinLoseConditions(this.currentLevel);
-      if (result.isWin) {
-        this.endGame();
-        return;
-      }
-      if (result.isLose && this.currentLevel.loseCondition.type !== 'crash') {
-        this.endGame();
-        return;
-      }
-    }
+    const isGroundCollision = this.collisionSystem.checkGroundCollision(this.kite.group.position);
 
     this.stats.height = this.kite.group.position.y;
     this.stats.maxHeight = Math.max(this.stats.maxHeight, this.stats.height);
@@ -398,6 +369,16 @@ export class GameEngine {
         this.stats.airCurrentCount * 3 * avgTracking
     );
     this.stats.shadowBonus = shadowBonusScore;
+
+    this.stats.durability = { ...this.kite.durability };
+    this.stats.tension = { ...this.kite.tension };
+
+    this.tensionAccumulator += this.kite.tension.current;
+    this.tensionSamples++;
+    this.stats.avgTension = this.tensionSamples > 0 ? this.tensionAccumulator / this.tensionSamples : 0;
+    this.stats.tensionSamples = this.tensionSamples;
+    this.stats.totalDamageTaken = this.totalDamageTaken;
+    this.stats.collisions = this.collisions;
 
     const durabilityRatio = this.stats.durability.current / this.stats.durability.max;
     const durabilityBonusScore = Math.floor(
@@ -423,7 +404,19 @@ export class GameEngine {
         Math.floor(this.totalDamageTaken * 0.5)
     );
     this.stats.score = Math.max(0, this.stats.score);
-    this.stats.collisions = this.collisions;
+
+    let levelWin = false;
+    let levelLose = false;
+    if (this.currentLevel) {
+      const result = this.checkWinLoseConditions(this.currentLevel);
+      levelWin = result.isWin;
+      levelLose = result.isLose && this.currentLevel.loseCondition.type !== 'crash';
+    }
+
+    if (this.kite.durability.current <= 0 || isGroundCollision || levelWin || levelLose) {
+      this.endGame();
+      return;
+    }
 
     this.sceneManager.updateCamera(this.kite.group.position);
     this.callbacks.onStatsUpdate(this.stats);
@@ -485,9 +478,24 @@ export class GameEngine {
       if (this.kite) {
         this.kite.setDurabilityConfig(this.durabilityConfig);
         this.kite.setTensionConfig(this.tensionConfig);
+        
+        if (this.state !== 'playing') {
+          this.kite.resetDurabilityAndTension();
+        }
       }
       if (this.collisionSystem) {
         this.collisionSystem.setDamageConfig(this.durabilityConfig.collisionDamage);
+      }
+      
+      if (this.state !== 'playing') {
+        this.stats.durability = { ...this.kite.durability };
+        this.stats.tension = { ...this.kite.tension };
+        this.stats.totalDamageTaken = 0;
+        this.totalDamageTaken = 0;
+        this.collisions = 0;
+        this.tensionAccumulator = 0;
+        this.tensionSamples = 0;
+        this.callbacks.onStatsUpdate(this.stats);
       }
     }
   }

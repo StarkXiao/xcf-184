@@ -100,6 +100,18 @@ export class Kite {
     this.tension.tensionDamageRate = this.tensionConfig.tensionDamageRate;
   }
 
+  public resetDurabilityAndTension(): void {
+    this.durability = this.createDurabilityState();
+    this.tension = this.createTensionState();
+    this.damageFlashTimer = 0;
+    const sail = this.mesh.children[0] as THREE.Mesh;
+    if (sail && sail.material) {
+      const material = sail.material as THREE.MeshStandardMaterial;
+      material.emissive.setRGB(0, 0, 0);
+      material.emissiveIntensity = 0;
+    }
+  }
+
   public takeDamage(amount: number): number {
     const actualDamage = amount;
     this.durability.current = Math.max(0, this.durability.current - actualDamage);
