@@ -92,6 +92,20 @@ export interface Announcement {
   priority: number;
 }
 
+export interface ObstacleSettlement {
+  totalSpawned: number;
+  totalCollided: number;
+  totalAvoided: number;
+  droneCollided: number;
+  adBalloonCollided: number;
+  birdCollided: number;
+  airplaneCollided: number;
+  nearMissCount: number;
+  warningsIssued: number;
+  maxObstaclesOnScreen: number;
+  avoidanceRate: number;
+}
+
 export interface StageSettlement {
   stageId: string;
   stageName: string;
@@ -107,6 +121,7 @@ export interface StageSettlement {
   isNewRecord: boolean;
   isFailed: boolean;
   failReason?: string;
+  obstacleStats?: ObstacleSettlement;
 }
 
 export const TASK_TYPE_NAMES: Record<TaskType, string> = {

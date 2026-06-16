@@ -94,6 +94,108 @@ export interface Building {
   color: number;
 }
 
+export type ObstacleType = 'drone' | 'adBalloon' | 'bird' | 'airplane';
+
+export type ObstacleMovementPattern = 'linear' | 'circular' | 'zigzag' | 'hover';
+
+export interface Obstacle {
+  id: string;
+  type: ObstacleType;
+  position: Vector3;
+  velocity: Vector3;
+  radius: number;
+  height: number;
+  movementPattern: ObstacleMovementPattern;
+  speed: number;
+  lifeTime: number;
+  maxLifeTime: number;
+  damage: number;
+  color: number;
+  rotation: Vector3;
+  angularVelocity: Vector3;
+  phase: number;
+  centerPosition?: Vector3;
+  orbitRadius?: number;
+  orbitSpeed?: number;
+  warningLevel: number;
+  isWarningActive: boolean;
+  warningStartTime: number;
+  hasCollided: boolean;
+}
+
+export interface ObstacleWarning {
+  id: string;
+  obstacleId: string;
+  type: ObstacleType;
+  position: Vector3;
+  direction: Vector3;
+  distance: number;
+  timeToCollision: number;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  startTime: number;
+  duration: number;
+}
+
+export interface ObstacleConfig {
+  enabled: boolean;
+  spawnRate: number;
+  maxObstacles: number;
+  minSpawnHeight: number;
+  maxSpawnHeight: number;
+  minSpeed: number;
+  maxSpeed: number;
+  droneProbability: number;
+  adBalloonProbability: number;
+  birdProbability: number;
+  airplaneProbability: number;
+  warningDistance: number;
+  warningAdvanceTime: number;
+  baseDamage: number;
+}
+
+export interface ObstacleStats {
+  totalSpawned: number;
+  totalCollided: number;
+  totalAvoided: number;
+  droneCollided: number;
+  adBalloonCollided: number;
+  birdCollided: number;
+  airplaneCollided: number;
+  nearMissCount: number;
+  warningsIssued: number;
+  maxObstaclesOnScreen: number;
+}
+
+export const DEFAULT_OBSTACLE_CONFIG: ObstacleConfig = {
+  enabled: true,
+  spawnRate: 0.015,
+  maxObstacles: 8,
+  minSpawnHeight: 30,
+  maxSpawnHeight: 150,
+  minSpeed: 2,
+  maxSpeed: 8,
+  droneProbability: 0.35,
+  adBalloonProbability: 0.3,
+  birdProbability: 0.25,
+  airplaneProbability: 0.1,
+  warningDistance: 80,
+  warningAdvanceTime: 3,
+  baseDamage: 15,
+};
+
+export const DEFAULT_OBSTACLE_STATS: ObstacleStats = {
+  totalSpawned: 0,
+  totalCollided: 0,
+  totalAvoided: 0,
+  droneCollided: 0,
+  adBalloonCollided: 0,
+  birdCollided: 0,
+  airplaneCollided: 0,
+  nearMissCount: 0,
+  warningsIssued: 0,
+  maxObstaclesOnScreen: 0,
+};
+
 export interface Cloud {
   id: string;
   position: Vector3;
@@ -179,6 +281,8 @@ export interface GameStats {
   weatherBonusScore: number;
   lightningNearMiss: number;
   comboFlow: ComboFlowState;
+  obstacleStats: ObstacleStats;
+  activeWarnings: ObstacleWarning[];
 }
 
 export interface WindFieldConfig {
@@ -235,6 +339,7 @@ export interface GameConfig {
   tensionConfig?: TensionConfig;
   difficultyPreset?: 'easy' | 'normal' | 'hard' | 'extreme';
   weatherEventConfig?: WeatherEventConfig;
+  obstacleConfig?: ObstacleConfig;
 }
 
 export const DEFAULT_WEATHER_EVENT_CONFIG: WeatherEventConfig = {
@@ -265,6 +370,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   turbulenceLevel: 0.2,
   cloudCoverage: 0.5,
   weatherEventConfig: { ...DEFAULT_WEATHER_EVENT_CONFIG },
+  obstacleConfig: { ...DEFAULT_OBSTACLE_CONFIG },
 };
 
 export const DEFAULT_WIND_FIELD: WindFieldConfig = {

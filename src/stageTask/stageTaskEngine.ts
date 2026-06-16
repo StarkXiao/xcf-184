@@ -6,9 +6,10 @@ import type {
   StageSettlement,
   Chapter,
   ChapterUnlockCondition,
+  ObstacleSettlement,
 } from './types';
 import { STAGES, CHAPTERS, getStageById } from './stageTaskData';
-import type { GameStats } from '../game/types';
+import type { GameStats, ObstacleStats } from '../game/types';
 
 export interface StageTaskCallbacks {
   onTaskComplete?: (task: StageTask, index: number) => void;
@@ -34,6 +35,7 @@ export class StageTaskEngine {
   private completedTaskIds: Set<string> = new Set();
   private lastSettlement: StageSettlement | null = null;
   private globalBestScore: number = 0;
+  private obstacleStats: ObstacleStats | null = null;
 
   constructor(callbacks: StageTaskCallbacks = {}) {
     this.callbacks = callbacks;
@@ -254,6 +256,7 @@ export class StageTaskEngine {
     this.currentStabilityHigh = false;
     this.announcements = [];
     this.lastSettlement = null;
+    this.obstacleStats = null;
 
     this.addAnnouncement({
       id: `stage-start-${performanceNow}`,
@@ -290,6 +293,10 @@ export class StageTaskEngine {
         this.completeTask(task, index, currentTime);
       }
     });
+
+    if (stats.obstacleStats) {
+      this.obstacleStats = { ...stats.obstacleStats };
+    }
 
     this.cleanupAnnouncements(currentTime);
 
@@ -560,6 +567,8 @@ export class StageTaskEngine {
       ? totalScore > originalStage.bestScore
       : false;
 
+    const obstacleSettlement = this.calculateObstacleSettlement();
+
     return {
       stageId: this.currentStage.id,
       stageName: this.currentStage.name,
@@ -574,6 +583,29 @@ export class StageTaskEngine {
       maxCombo: this.progress.maxCombo,
       isNewRecord,
       isFailed: false,
+      obstacleStats: obstacleSettlement,
+    };
+  }
+
+  private calculateObstacleSettlement(): ObstacleSettlement | undefined {
+    if (!this.obstacleStats) return undefined;
+
+    const { totalSpawned, totalCollided, totalAvoided } = this.obstacleStats;
+    const totalEncountered = totalCollided + totalAvoided;
+    const avoidanceRate = totalEncountered > 0 ? totalAvoided / totalEncountered : 1;
+
+    return {
+      totalSpawned,
+      totalCollided,
+      totalAvoided,
+      droneCollided: this.obstacleStats.droneCollided,
+      adBalloonCollided: this.obstacleStats.adBalloonCollided,
+      birdCollided: this.obstacleStats.birdCollided,
+      airplaneCollided: this.obstacleStats.airplaneCollided,
+      nearMissCount: this.obstacleStats.nearMissCount,
+      warningsIssued: this.obstacleStats.warningsIssued,
+      maxObstaclesOnScreen: this.obstacleStats.maxObstaclesOnScreen,
+      avoidanceRate,
     };
   }
 
@@ -612,6 +644,7 @@ export class StageTaskEngine {
     };
     this.announcements = [];
     this.lastSettlement = null;
+    this.obstacleStats = null;
   }
 
   public getWeatherConfigOverride(stage: Stage): {

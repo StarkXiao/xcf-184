@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Building } from './types';
+import type { Building, Obstacle } from './types';
 
 export interface CollisionResult {
   collided: boolean;
@@ -7,12 +7,22 @@ export interface CollisionResult {
   penetration: number;
   damage: number;
   impactVelocity: number;
+  obstacleId?: string;
+  obstacleType?: string;
+  collisionType: 'building' | 'obstacle' | 'none';
+}
+
+export interface ObstacleCollisionResult extends CollisionResult {
+  obstacleId: string;
+  obstacleType: string;
 }
 
 export class CollisionSystem {
   private buildings: { mesh: THREE.Mesh; data: Building }[];
+  private obstacles: { data: Obstacle; mesh: THREE.Group }[] = [];
   private collisionDamageMultiplier: number = 1.0;
   private baseCollisionDamage: number = 25;
+  private obstacleDamageMultiplier: number = 1.0;
 
   constructor(buildings: { mesh: THREE.Mesh; data: Building }[]) {
     this.buildings = buildings;
@@ -21,6 +31,14 @@ export class CollisionSystem {
   public setDamageConfig(baseDamage: number, multiplier: number = 1.0): void {
     this.baseCollisionDamage = baseDamage;
     this.collisionDamageMultiplier = multiplier;
+  }
+
+  public setObstacleDamageMultiplier(multiplier: number): void {
+    this.obstacleDamageMultiplier = multiplier;
+  }
+
+  public setObstacles(obstacles: { data: Obstacle; mesh: THREE.Group }[]): void {
+    this.obstacles = obstacles;
   }
 
   public checkKiteCollision(
@@ -34,6 +52,7 @@ export class CollisionSystem {
       penetration: 0,
       damage: 0,
       impactVelocity: 0,
+      collisionType: 'none',
     };
 
     for (const building of this.buildings) {
@@ -48,12 +67,130 @@ export class CollisionSystem {
       );
 
       if (collision.collided) {
-        result = collision;
+        result = { ...collision, collisionType: 'building' };
         break;
       }
     }
 
+    if (!result.collided) {
+      const obstacleCollision = this.checkObstacleCollision(
+        kitePosition,
+        kiteVelocity,
+        kiteRadius
+      );
+      if (obstacleCollision.collided) {
+        result = obstacleCollision;
+      }
+    }
+
     return result;
+  }
+
+  public checkObstacleCollision(
+    kitePosition: THREE.Vector3,
+    kiteVelocity: THREE.Vector3,
+    kiteRadius: number = 3
+  ): ObstacleCollisionResult | CollisionResult {
+    let closestCollision: CollisionResult | null = null;
+    let closestObstacle: { data: Obstacle; mesh: THREE.Group } | null = null;
+    let minDistance = Infinity;
+
+    for (const obstacle of this.obstacles) {
+      if (obstacle.data.hasCollided) continue;
+
+      const collision = this.checkSphereCollision(
+        kitePosition,
+        kiteVelocity,
+        kiteRadius,
+        new THREE.Vector3(
+          obstacle.data.position.x,
+          obstacle.data.position.y,
+          obstacle.data.position.z
+        ),
+        obstacle.data.radius,
+        obstacle.data.damage
+      );
+
+      if (collision.collided) {
+        const distance = kitePosition.distanceTo(
+          new THREE.Vector3(
+            obstacle.data.position.x,
+            obstacle.data.position.y,
+            obstacle.data.position.z
+          )
+        );
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestCollision = collision;
+          closestObstacle = obstacle;
+        }
+      }
+    }
+
+    if (closestCollision && closestObstacle) {
+      return {
+        ...closestCollision,
+        obstacleId: closestObstacle.data.id,
+        obstacleType: closestObstacle.data.type,
+        collisionType: 'obstacle',
+      };
+    }
+
+    return {
+      collided: false,
+      normal: new THREE.Vector3(0, 1, 0),
+      penetration: 0,
+      damage: 0,
+      impactVelocity: 0,
+      collisionType: 'none',
+    };
+  }
+
+  private checkSphereCollision(
+    kitePos: THREE.Vector3,
+    kiteVel: THREE.Vector3,
+    kiteRadius: number,
+    obstaclePos: THREE.Vector3,
+    obstacleRadius: number,
+    obstacleDamage: number
+  ): CollisionResult {
+    const dx = kitePos.x - obstaclePos.x;
+    const dy = kitePos.y - obstaclePos.y;
+    const dz = kitePos.z - obstaclePos.z;
+    const distanceSquared = dx * dx + dy * dy + dz * dz;
+    const combinedRadius = kiteRadius + obstacleRadius;
+
+    if (distanceSquared < combinedRadius * combinedRadius) {
+      const distance = Math.sqrt(distanceSquared);
+      const normal = new THREE.Vector3(
+        dx / (distance || 1),
+        dy / (distance || 1),
+        dz / (distance || 1)
+      );
+
+      const impactVelocity = Math.abs(kiteVel.dot(normal));
+      const speedFactor = Math.min(2, impactVelocity * 0.3);
+      const damage = obstacleDamage * (0.6 + speedFactor * 0.4) * this.obstacleDamageMultiplier;
+
+      return {
+        collided: true,
+        normal,
+        penetration: combinedRadius - distance,
+        damage,
+        impactVelocity,
+        collisionType: 'obstacle',
+      };
+    }
+
+    return {
+      collided: false,
+      normal: new THREE.Vector3(0, 1, 0),
+      penetration: 0,
+      damage: 0,
+      impactVelocity: 0,
+      collisionType: 'none',
+    };
   }
 
   private checkBoxCollision(
@@ -107,6 +244,7 @@ export class CollisionSystem {
         penetration: kiteRadius - distance,
         damage,
         impactVelocity,
+        collisionType: 'building',
       };
     }
 
@@ -116,6 +254,7 @@ export class CollisionSystem {
       penetration: 0,
       damage: 0,
       impactVelocity: 0,
+      collisionType: 'none',
     };
   }
 

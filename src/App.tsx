@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { GameEngine } from './game/GameEngine';
 import type { GameState, GameStats } from './game/types';
-import { DEFAULT_GAME_CONFIG, DEFAULT_COMBO_FLOW_STATE } from './game/types';
+import {
+  DEFAULT_GAME_CONFIG,
+  DEFAULT_COMBO_FLOW_STATE,
+  DEFAULT_OBSTACLE_STATS,
+} from './game/types';
 import { MainMenu } from './components/MainMenu';
 import { GameHUD } from './components/GameHUD';
 import { PauseMenu } from './components/PauseMenu';
@@ -101,6 +105,8 @@ const DEFAULT_STATS: GameStats = {
   weatherBonusScore: 0,
   lightningNearMiss: 0,
   comboFlow: { ...DEFAULT_COMBO_FLOW_STATE },
+  obstacleStats: { ...DEFAULT_OBSTACLE_STATS },
+  activeWarnings: [],
 };
 
 function App() {

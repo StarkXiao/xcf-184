@@ -7,6 +7,7 @@ import { CollisionSystem } from './CollisionSystem';
 import { WeatherSystem } from './WeatherSystem';
 import { ShadowTrackingSystem } from './ShadowTrackingSystem';
 import { ComboFlowSystem } from './ComboFlowSystem';
+import { ObstacleSystem } from './ObstacleSystem';
 import type {
   GameConfig,
   GameStats,
@@ -16,6 +17,13 @@ import type {
   AirCurrent,
   DurabilityConfig,
   TensionConfig,
+  ObstacleConfig,
+  ObstacleStats,
+  ObstacleWarning,
+} from './types';
+import {
+  DEFAULT_OBSTACLE_CONFIG,
+  DEFAULT_OBSTACLE_STATS,
 } from './types';
 import {
   DEFAULT_GAME_CONFIG,
@@ -53,6 +61,7 @@ export class GameEngine {
   private weatherSystem!: WeatherSystem;
   private shadowTrackingSystem!: ShadowTrackingSystem;
   private comboFlowSystem!: ComboFlowSystem;
+  private obstacleSystem!: ObstacleSystem;
 
   private animationId: number | null = null;
   private lastTime: number = 0;
@@ -70,6 +79,7 @@ export class GameEngine {
   private tensionSamples = 0;
   private durabilityConfig: DurabilityConfig;
   private tensionConfig: TensionConfig;
+  private obstacleConfig: ObstacleConfig;
 
   constructor(
     container: HTMLElement,
@@ -87,6 +97,7 @@ export class GameEngine {
 
     this.durabilityConfig = this.config.durabilityConfig ?? { ...DEFAULT_DURABILITY_CONFIG };
     this.tensionConfig = this.config.tensionConfig ?? { ...DEFAULT_TENSION_CONFIG };
+    this.obstacleConfig = this.config.obstacleConfig ?? { ...DEFAULT_OBSTACLE_CONFIG };
 
     this.stats = this.createInitialStats();
   }
@@ -142,6 +153,8 @@ export class GameEngine {
       weatherBonusScore: 0,
       lightningNearMiss: 0,
       comboFlow: { ...DEFAULT_COMBO_FLOW_STATE, hits: [] },
+      obstacleStats: { ...DEFAULT_OBSTACLE_STATS },
+      activeWarnings: [],
     };
   }
 
@@ -173,6 +186,12 @@ export class GameEngine {
     );
 
     this.comboFlowSystem = new ComboFlowSystem(this.sceneManager.scene);
+
+    this.obstacleSystem = new ObstacleSystem(
+      this.sceneManager.scene,
+      this.config.worldSize,
+      this.obstacleConfig
+    );
 
     this.sceneManager.scene.add(this.kite.group);
     this.sceneManager.scene.add(this.kite.shadowMesh);
@@ -224,6 +243,7 @@ export class GameEngine {
     );
 
     this.comboFlowSystem.reset();
+    this.obstacleSystem.clear();
 
     if (this.currentLevel) {
       this.loadAirCurrents(this.currentLevel.airCurrents);
@@ -394,6 +414,14 @@ export class GameEngine {
     );
     this.stats.comboFlow = this.comboFlowSystem.getState();
 
+    this.obstacleSystem.update(
+      delta,
+      currentTime,
+      this.kite.group.position,
+      this.kite.velocity
+    );
+    this.collisionSystem.setObstacles(this.obstacleSystem.getObstaclesForCollision());
+
     const collision = this.collisionSystem.checkKiteCollision(
       this.kite.group.position,
       this.kite.velocity
@@ -410,7 +438,14 @@ export class GameEngine {
       const actualDamage = this.kite.takeDamage(resolved.damage * damageMultiplier);
       this.totalDamageTaken += actualDamage;
       this.collisions++;
+
+      if (collision.collisionType === 'obstacle' && collision.obstacleId) {
+        this.obstacleSystem.notifyCollision(collision.obstacleId);
+      }
     }
+
+    this.stats.obstacleStats = this.obstacleSystem.getStats();
+    this.stats.activeWarnings = this.obstacleSystem.getWarnings();
 
     const isGroundCollision = this.collisionSystem.checkGroundCollision(this.kite.group.position);
 
@@ -599,6 +634,7 @@ export class GameEngine {
 
     this.durabilityConfig = this.config.durabilityConfig ?? this.durabilityConfig;
     this.tensionConfig = this.config.tensionConfig ?? this.tensionConfig;
+    this.obstacleConfig = this.config.obstacleConfig ?? this.obstacleConfig;
 
     if (this.kite) {
       this.kite.setDurabilityConfig(this.durabilityConfig);
@@ -623,6 +659,10 @@ export class GameEngine {
       this.sceneManager.scene,
       this.config
     );
+
+    if (this.obstacleSystem) {
+      this.obstacleSystem.reconfigure(this.obstacleConfig);
+    }
   }
 
   public destroy(): void {
@@ -633,6 +673,7 @@ export class GameEngine {
     this.airCurrentSystem.clear();
     this.weatherSystem.clear();
     this.shadowTrackingSystem.clear();
+    this.obstacleSystem?.dispose();
     this.flightController.dispose();
     this.sceneManager.dispose();
   }
