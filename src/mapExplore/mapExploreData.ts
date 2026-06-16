@@ -76,7 +76,7 @@ function generateDefaultZones(regionId: string, worldSize: number, terrain: stri
   return zones;
 }
 
-function generateZoneAirCurrentConfigs(regionId: string, zones: ZoneConfig[], terrain: string): SpecialAirCurrentZoneConfig[] {
+function generateZoneAirCurrentConfigs(_regionId: string, zones: ZoneConfig[], terrain: string): SpecialAirCurrentZoneConfig[] {
   return zones.map((zone) => {
     const baseConfig: SpecialAirCurrentZoneConfig = {
       zoneId: zone.id,

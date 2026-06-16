@@ -4,11 +4,8 @@ import type {
   StageSettlementResult,
   Stage,
   MapExploreFlightResult,
-  Region,
   ZoneConfig,
   RefreshTrigger,
-  ZoneExplorationState,
-  SpecialAirCurrentZoneConfig,
 } from './types';
 import {
   REGIONS,
@@ -18,7 +15,7 @@ import {
   STAGES,
   createDefaultMapExploreState,
 } from './mapExploreData';
-import type { GameStats, ZoneBuildConfig, ZoneAirCurrentConfig, GameConfig } from '../game/types';
+import type { GameStats, ZoneBuildConfig, ZoneAirCurrentConfig } from '../game/types';
 
 const SAVE_KEY = 'kite_map_explore_save';
 
@@ -757,6 +754,7 @@ export class MapExploreEngine {
             value = regionProgress.crossZoneFlightsCompleted;
             break;
           }
+        }
 
         progress[obj.type] = Math.max(progress[obj.type] || 0, value);
       });
@@ -1074,7 +1072,6 @@ export class MapExploreEngine {
     const configs: ZoneAirCurrentConfig[] = [];
 
     region.zoneAirCurrentConfigs.forEach((zac) => {
-      const zone = region.zones.find((z) => z.id === zac.zoneId);
       const permanentPositions = zac.permanentCurrentPositions?.map((p) => ({
         position: { x: p.position.x, y: p.height || 50, z: p.position.y },
         type: p.type,

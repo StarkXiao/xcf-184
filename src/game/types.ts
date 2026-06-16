@@ -87,6 +87,7 @@ export interface AirCurrent {
 
 export interface Building {
   id: string;
+  zoneId?: string | null;
   position: Vector3;
   width: number;
   height: number;

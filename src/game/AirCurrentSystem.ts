@@ -307,7 +307,7 @@ export class AirCurrentSystem {
       }
 
       const brightTypes: Array<'updraft' | 'downdraft' | 'turbulence'> =
-        spawnZoneConfig?.preferredTypes.filter((t) => t === 'updraft').length >= 2
+        spawnZoneConfig && spawnZoneConfig.preferredTypes.filter((t) => t === 'updraft').length >= 2
           ? spawnZoneConfig.preferredTypes
           : ['updraft', 'updraft', 'updraft', 'turbulence'];
 

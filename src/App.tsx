@@ -1096,6 +1096,10 @@ function App() {
         buildingDensity: configOverride.buildingDensity,
         turbulenceLevel: configOverride.turbulenceLevel,
         cloudCoverage: configOverride.cloudCoverage,
+        buildingSeed: configOverride.buildingSeed,
+        zoneConfigs: configOverride.zoneConfigs,
+        zoneAirCurrentConfigs: configOverride.zoneAirCurrentConfigs,
+        flightObjectiveModifiers: configOverride.flightObjectiveModifiers,
       });
 
       const gravity = configOverride.gravity ?? 0.015;

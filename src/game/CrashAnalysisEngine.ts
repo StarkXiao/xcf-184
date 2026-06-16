@@ -416,7 +416,11 @@ export class CrashAnalysisEngine {
     }
 
     if (obstacleHits > 0) {
-      const obstacleTypes = new Set(collisionEvents.filter(e => e.type === 'obstacle').map(e => e.obstacleType));
+      const obstacleTypes = new Set(
+        collisionEvents
+          .filter(e => e.type === 'obstacle' && e.obstacleType)
+          .map(e => e.obstacleType!)
+      );
       const typeNames: Record<string, string> = { drone: '无人机', adBalloon: '广告气球', bird: '飞鸟', airplane: '飞机' };
       const typesStr = Array.from(obstacleTypes).map(t => typeNames[t] || t).join('、');
       suggestions.push({
@@ -522,7 +526,7 @@ export class CrashAnalysisEngine {
     };
   }
 
-  private generateQuickTip(primaryCause: FallCauseType, stats: GameStats): string {
+  private generateQuickTip(primaryCause: FallCauseType, _stats: GameStats): string {
     switch (primaryCause) {
       case 'durability_depleted':
         return '💡 下次飞行注意规避碰撞，利用影子追踪得分代替冒险操作';
@@ -547,7 +551,7 @@ export class CrashAnalysisEngine {
 
   private getTimelineTypeConfig(
     type: CollisionEventType,
-    durabilityPercent: number
+    _durabilityPercent: number
   ): { icon: string; color: string } {
     switch (type) {
       case 'building':
