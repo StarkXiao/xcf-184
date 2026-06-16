@@ -18,6 +18,9 @@ import type {
   DurabilityConfig,
   TensionConfig,
   ObstacleConfig,
+  CollisionEventRecord,
+  CrashStateSnapshot,
+  CollisionEventType,
 } from './types';
 import {
   DEFAULT_OBSTACLE_CONFIG,
@@ -78,6 +81,11 @@ export class GameEngine {
   private durabilityConfig: DurabilityConfig;
   private tensionConfig: TensionConfig;
   private obstacleConfig: ObstacleConfig;
+  private collisionEvents: CollisionEventRecord[] = [];
+  private crashSnapshots: CrashStateSnapshot[] = [];
+  private lastCrashSnapshotTime: number = 0;
+  private lightningDamageAccumulator: number = 0;
+  private tensionDamageAccumulator: number = 0;
 
   constructor(
     container: HTMLElement,
@@ -259,6 +267,11 @@ export class GameEngine {
     this.shadowTrackingAccumulator = 0;
     this.shadowTrackingSamples = 0;
     this.lastAirCurrentFrameCount = 0;
+    this.collisionEvents = [];
+    this.crashSnapshots = [];
+    this.lastCrashSnapshotTime = 0;
+    this.lightningDamageAccumulator = 0;
+    this.tensionDamageAccumulator = 0;
     this.startTime = performance.now();
     this.lastTime = performance.now();
 
@@ -297,6 +310,7 @@ export class GameEngine {
       const rapidDamage = this.durabilityConfig.rapidReelDamage * Math.abs(reelResult.reelDelta) * 60 * damageMultiplier;
       this.kite.takeDamage(rapidDamage);
       this.totalDamageTaken += rapidDamage;
+      this.tensionDamageAccumulator += rapidDamage;
     }
 
     this.weatherSystem.update(delta, this.stats.time);
@@ -338,10 +352,18 @@ export class GameEngine {
     if (lightningResult.damage > 0) {
       const actualLightningDamage = this.kite.takeDamage(lightningResult.damage);
       this.totalDamageTaken += actualLightningDamage;
+      this.lightningDamageAccumulator += actualLightningDamage;
       if (!lightningResult.hit) {
         this.stats.lightningNearMiss++;
       } else {
         lightningDirectHit = true;
+        this.recordCollisionEvent(
+          'lightning',
+          actualLightningDamage,
+          0,
+          undefined,
+          'lightning'
+        );
       }
     }
 
@@ -437,6 +459,14 @@ export class GameEngine {
       this.totalDamageTaken += actualDamage;
       this.collisions++;
 
+      this.recordCollisionEvent(
+        collision.collisionType as CollisionEventType,
+        resolved.damage * damageMultiplier,
+        collision.impactVelocity,
+        collision.obstacleId,
+        collision.obstacleType
+      );
+
       if (collision.collisionType === 'obstacle' && collision.obstacleId) {
         this.obstacleSystem.notifyCollision(collision.obstacleId);
       }
@@ -446,6 +476,22 @@ export class GameEngine {
     this.stats.activeWarnings = this.obstacleSystem.getWarnings();
 
     const isGroundCollision = this.collisionSystem.checkGroundCollision(this.kite.group.position);
+
+    if (isGroundCollision) {
+      this.recordCollisionEvent(
+        'ground',
+        this.kite.durability.current,
+        this.kite.velocity.length(),
+        undefined,
+        'ground'
+      );
+    }
+
+    const snapshotInterval = 2.0;
+    if (this.stats.time - this.lastCrashSnapshotTime >= snapshotInterval) {
+      this.captureCrashSnapshot();
+      this.lastCrashSnapshotTime = this.stats.time;
+    }
 
     this.stats.height = this.kite.group.position.y;
     this.stats.maxHeight = Math.max(this.stats.maxHeight, this.stats.height);
@@ -549,6 +595,8 @@ export class GameEngine {
   }
 
   private endGame(): void {
+    this.captureCrashSnapshot();
+
     this.state = 'gameover';
     this.callbacks.onStateChange(this.state);
     this.callbacks.onGameOver(this.stats);
@@ -557,6 +605,89 @@ export class GameEngine {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
+  }
+
+  private recordCollisionEvent(
+    type: CollisionEventType,
+    damage: number,
+    impactSpeed: number,
+    obstacleId?: string,
+    obstacleType?: string
+  ): void {
+    const event: CollisionEventRecord = {
+      id: `ce_${Date.now()}_${this.collisionEvents.length}`,
+      type,
+      timestamp: Date.now(),
+      gameTime: this.stats.time,
+      position: {
+        x: this.kite.group.position.x,
+        y: this.kite.group.position.y,
+        z: this.kite.group.position.z,
+      },
+      velocity: {
+        x: this.kite.velocity.x,
+        y: this.kite.velocity.y,
+        z: this.kite.velocity.z,
+      },
+      damage,
+      impactSpeed,
+      obstacleId,
+      obstacleType,
+      snapshot: this.createSnapshotFromCurrentState(),
+    };
+    this.collisionEvents.push(event);
+    this.captureCrashSnapshot();
+  }
+
+  private createSnapshotFromCurrentState(): CrashStateSnapshot {
+    const windField = this.weatherSystem?.config?.windField;
+    return {
+      durability: this.kite.durability.current,
+      maxDurability: this.kite.durability.max,
+      tension: this.kite.tension.current,
+      maxTension: this.kite.tension.max,
+      height: this.kite.group.position.y,
+      speed: this.kite.velocity.length(),
+      stability: this.stats.flightStability,
+      shadowTracking: this.stats.shadowTracking,
+      combo: this.stats.comboFlow.combo,
+      score: this.stats.score,
+      distance: this.stats.distance,
+      weatherEvent: this.stats.weatherEvent,
+      windSpeed: windField?.windSpeed ?? this.config.windSpeed,
+      turbulenceLevel: windField?.turbulenceLevel ?? this.config.turbulenceLevel,
+      collisions: this.collisions,
+      totalDamageTaken: this.totalDamageTaken,
+      time: this.stats.time,
+    };
+  }
+
+  private captureCrashSnapshot(): void {
+    this.crashSnapshots.push(this.createSnapshotFromCurrentState());
+    if (this.crashSnapshots.length > 300) {
+      this.crashSnapshots = this.crashSnapshots.slice(-300);
+    }
+  }
+
+  public getCollisionEvents(): CollisionEventRecord[] {
+    return [...this.collisionEvents];
+  }
+
+  public getCrashSnapshots(): CrashStateSnapshot[] {
+    return [...this.crashSnapshots];
+  }
+
+  public getDamageBreakdown(): { collisionDamage: number; tensionDamage: number; weatherDamage: number; lightningDamage: number; otherDamage: number } {
+    const collisionDamage = this.collisionEvents
+      .filter(e => e.type === 'building' || e.type === 'obstacle' || e.type === 'ground')
+      .reduce((sum, e) => sum + e.damage, 0);
+    return {
+      collisionDamage,
+      tensionDamage: this.tensionDamageAccumulator,
+      weatherDamage: Math.max(0, this.totalDamageTaken - collisionDamage - this.tensionDamageAccumulator - this.lightningDamageAccumulator),
+      lightningDamage: this.lightningDamageAccumulator,
+      otherDamage: 0,
+    };
   }
 
   public setFlightParams(params: FlightParams): void {

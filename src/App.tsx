@@ -10,6 +10,7 @@ import type {
   StrategySuggestion,
   UIFlightTip,
   TuningPreset,
+  CrashAnalysisResult,
 } from './game/types';
 import {
   DEFAULT_GAME_CONFIG,
@@ -55,6 +56,7 @@ import { mapExploreStateEmitter } from './mapExplore/useMapExplore';
 import { ReplayCenter } from './replay';
 import { replayEngine } from './replay/replayEngine';
 import type { FlightRecord } from './journey/types';
+import { crashAnalysisEngine } from './game/CrashAnalysisEngine';
 import {
   StageSelect,
   StageTaskHUD,
@@ -167,6 +169,7 @@ function App() {
   const [stageSettlement, setStageSettlement] = useState<StageSettlement | null>(null);
   const [showStageSettlement, setShowStageSettlement] = useState(false);
   const [difficulty, setDifficulty] = useState<'easy' | 'normal' | 'hard' | 'extreme'>('normal');
+  const [crashAnalysis, setCrashAnalysis] = useState<CrashAnalysisResult | null>(null);
   const [, setForceUpdate] = useState(0);
   const flightDataPointsRef = useRef<FlightDataPoint[]>([]);
   const flightDataLastSaveTimeRef = useRef<number>(0);
@@ -467,6 +470,19 @@ function App() {
 
   const handleGameOver = useCallback((gameOverStats: GameStats) => {
     setFinalStats(gameOverStats);
+
+    if (gameEngineRef.current) {
+      const collisionEvents = gameEngineRef.current.getCollisionEvents();
+      const snapshots = gameEngineRef.current.getCrashSnapshots();
+      const damageBreakdown = gameEngineRef.current.getDamageBreakdown();
+      const result = crashAnalysisEngine.analyze(
+        gameOverStats,
+        collisionEvents,
+        snapshots,
+        damageBreakdown
+      );
+      setCrashAnalysis(result);
+    }
 
     const savedFestivalSceneId = festivalSceneIdRef.current;
     const baseAdjustedScore = workshop.calculateFinalScore(gameOverStats.score);
@@ -841,6 +857,7 @@ function App() {
     setRealtimeTitles([]);
     setGameNewAchievements([]);
     setGameNewTitles([]);
+    setCrashAnalysis(null);
     journey.resetRealtimeState();
 
     const currentTrackId = tournamentTrackIdRef.current;
@@ -891,6 +908,7 @@ function App() {
 
   const handleMainMenu = () => {
     gameEngineRef.current?.pause();
+    setCrashAnalysis(null);
     if (tournamentTrackIdRef.current) {
       tournamentTrackIdRef.current = null;
       setTournamentTrackId(null);
@@ -1451,6 +1469,8 @@ function App() {
           scoreBonus={workshop.state.totalScoreBonus}
           newAchievements={gameNewAchievements}
           newTitles={gameNewTitles}
+          crashAnalysis={crashAnalysis}
+          onApplyPreset={handleApplyPreset}
           onRestart={handleRestart}
           onMainMenu={handleMainMenu}
           onWorkshop={handleOpenWorkshop}

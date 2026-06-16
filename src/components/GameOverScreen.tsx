@@ -1,7 +1,9 @@
 import React, { useMemo } from 'react';
-import type { GameStats, ComboFlowHit } from '../game/types';
+import type { GameStats, ComboFlowHit, CrashAnalysisResult } from '../game/types';
 import type { NewlyUnlockedAchievement, NewlyUnlockedTitle } from '../journey';
 import { RARITY_COLORS, RARITY_NAMES } from '../journey/types';
+import { CrashReplayPanel } from './CrashReplayPanel';
+import './crashReplay.css';
 
 interface GameOverScreenProps {
   stats: GameStats;
@@ -10,6 +12,8 @@ interface GameOverScreenProps {
   scoreBonus?: number;
   newAchievements?: NewlyUnlockedAchievement[];
   newTitles?: NewlyUnlockedTitle[];
+  crashAnalysis?: CrashAnalysisResult | null;
+  onApplyPreset?: (presetId: string) => void;
   onRestart: () => void;
   onMainMenu: () => void;
   onWorkshop?: () => void;
@@ -49,6 +53,8 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
   scoreBonus = 0,
   newAchievements = [],
   newTitles = [],
+  crashAnalysis,
+  onApplyPreset,
   onRestart,
   onMainMenu,
   onWorkshop,
@@ -103,7 +109,11 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
         </div>
 
         <h2 className="gameover-title">游戏结束</h2>
-        <p className="gameover-subtitle">风筝已降落</p>
+        <p className="gameover-subtitle">
+          {crashAnalysis
+            ? `${crashAnalysis.analysis.primaryCauseLabel} — ${crashAnalysis.analysis.primaryCauseDescription}`
+            : '风筝已降落'}
+        </p>
 
         <div className="final-score">
           <div className="final-score-label">最终得分</div>
@@ -407,6 +417,14 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
               </div>
             )}
           </div>
+        )}
+
+        {crashAnalysis && (
+          <CrashReplayPanel
+            crashAnalysis={crashAnalysis}
+            onRestart={onRestart}
+            onApplyPreset={onApplyPreset}
+          />
         )}
 
         <div className="gameover-buttons">

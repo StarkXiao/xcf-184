@@ -626,6 +626,155 @@ export const WEATHER_SAFETY_THRESHOLDS = {
   dangerGustStrength: 0.7,
 };
 
+export type FallCauseType =
+  | 'durability_depleted'
+  | 'ground_collision'
+  | 'lightning_strike'
+  | 'cumulative_damage'
+  | 'tension_overload'
+  | 'rapid_descent'
+  | 'obstacle_chain'
+  | 'weather_hazard'
+  | 'unknown';
+
+export type CollisionEventType = 'building' | 'obstacle' | 'ground' | 'lightning';
+
+export interface CollisionEventRecord {
+  id: string;
+  type: CollisionEventType;
+  timestamp: number;
+  gameTime: number;
+  position: Vector3;
+  velocity: Vector3;
+  damage: number;
+  impactSpeed: number;
+  obstacleId?: string;
+  obstacleType?: string;
+  snapshot: CrashStateSnapshot;
+}
+
+export interface CrashStateSnapshot {
+  durability: number;
+  maxDurability: number;
+  tension: number;
+  maxTension: number;
+  height: number;
+  speed: number;
+  stability: number;
+  shadowTracking: number;
+  combo: number;
+  score: number;
+  distance: number;
+  weatherEvent: WeatherEventType;
+  windSpeed: number;
+  turbulenceLevel: number;
+  collisions: number;
+  totalDamageTaken: number;
+  time: number;
+}
+
+export interface FallCauseAnalysis {
+  primaryCause: FallCauseType;
+  primaryCauseLabel: string;
+  primaryCauseDescription: string;
+  contributingFactors: Array<{
+    factor: string;
+    weight: number;
+    description: string;
+  }>;
+  criticalMomentIndex: number;
+  timeline: CrashTimelineEntry[];
+  summary: string;
+  severity: 'minor' | 'moderate' | 'severe' | 'catastrophic';
+  durabilityAtEnd: number;
+  totalCollisions: number;
+  damageBreakdown: {
+    collisionDamage: number;
+    tensionDamage: number;
+    weatherDamage: number;
+    lightningDamage: number;
+    otherDamage: number;
+  };
+}
+
+export interface CrashTimelineEntry {
+  time: number;
+  type: CollisionEventType | 'warning' | 'critical' | 'recovery';
+  label: string;
+  description: string;
+  durabilityPercent: number;
+  damage: number;
+  position: Vector3;
+  icon: string;
+  color: string;
+}
+
+export interface RestartGuidance {
+  title: string;
+  suggestions: Array<{
+    category: 'dodge' | 'control' | 'equipment' | 'route' | 'weather';
+    icon: string;
+    title: string;
+    description: string;
+    priority: 'high' | 'medium' | 'low';
+  }>;
+  quickTip: string;
+  recommendedPreset?: string;
+}
+
+export interface CrashAnalysisResult {
+  collisionEvents: CollisionEventRecord[];
+  snapshots: CrashStateSnapshot[];
+  analysis: FallCauseAnalysis;
+  guidance: RestartGuidance;
+}
+
+export const COLLISION_EVENT_TYPE_LABELS: Record<CollisionEventType, string> = {
+  building: '建筑物碰撞',
+  obstacle: '障碍物碰撞',
+  ground: '坠地',
+  lightning: '雷击',
+};
+
+export const FALL_CAUSE_LABELS: Record<FallCauseType, string> = {
+  durability_depleted: '耐久耗尽',
+  ground_collision: '坠地坠毁',
+  lightning_strike: '雷击坠毁',
+  cumulative_damage: '累积损伤',
+  tension_overload: '张力过载',
+  rapid_descent: '急速下坠',
+  obstacle_chain: '连续碰撞',
+  weather_hazard: '天气灾害',
+  unknown: '未知原因',
+};
+
+export const FALL_CAUSE_DESCRIPTIONS: Record<FallCauseType, string> = {
+  durability_depleted: '风筝耐久度降至零，结构完全损坏',
+  ground_collision: '风筝失去高度，直接撞击地面',
+  lightning_strike: '在雷暴天气中被闪电直接击中',
+  cumulative_damage: '多次碰撞和损伤积累导致坠毁',
+  tension_overload: '线绳张力持续过高，导致风筝失控坠落',
+  rapid_descent: '风筝在短时间内急速下坠无法恢复',
+  obstacle_chain: '连续撞击多个障碍物导致连环坠毁',
+  weather_hazard: '极端天气条件下失去控制',
+  unknown: '无法确定具体坠毁原因',
+};
+
+export const SEVERITY_LABELS: Record<string, string> = {
+  minor: '轻微',
+  moderate: '中等',
+  severe: '严重',
+  catastrophic: '灾难性',
+};
+
+export const GUIDANCE_CATEGORY_LABELS: Record<string, string> = {
+  dodge: '闪避技巧',
+  control: '操控优化',
+  equipment: '装备建议',
+  route: '路线规划',
+  weather: '天气应对',
+};
+
 export const DIFFICULTY_PRESETS: Record<string, Partial<GameConfig>> = {
   easy: {
     durabilityConfig: {

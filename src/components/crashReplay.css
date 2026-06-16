@@ -1,0 +1,531 @@
+.crash-replay-panel {
+  margin-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 16px;
+}
+
+.crash-replay-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.crash-replay-icon {
+  font-size: 20px;
+}
+
+.crash-replay-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.crash-summary-bar {
+  margin-bottom: 16px;
+}
+
+.crash-summary-cause {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border-left: 4px solid;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.crash-cause-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.crash-cause-info {
+  flex: 1;
+  text-align: left;
+}
+
+.crash-cause-label {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.crash-cause-desc {
+  font-size: 12px;
+  color: #aaa;
+  line-height: 1.4;
+}
+
+.crash-severity-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.crash-replay-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.crash-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #999;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.crash-tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ccc;
+}
+
+.crash-tab.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 600;
+}
+
+.crash-tab-icon {
+  font-size: 14px;
+}
+
+.crash-tab-label {
+  font-size: 12px;
+}
+
+.crash-replay-content {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.crash-replay-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.crash-replay-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.crash-replay-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+.crash-analysis-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.crash-summary-text {
+  font-size: 13px;
+  color: #ccc;
+  line-height: 1.6;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  text-align: left;
+}
+
+.crash-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ddd;
+  margin-bottom: 8px;
+}
+
+.crash-damage-breakdown {
+  display: flex;
+  flex-direction: column;
+}
+
+.crash-damage-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.crash-damage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crash-damage-label {
+  font-size: 12px;
+  color: #bbb;
+  width: 56px;
+  flex-shrink: 0;
+  text-align: left;
+}
+
+.crash-damage-bar-bg {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.crash-damage-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.crash-damage-value {
+  font-size: 12px;
+  color: #ddd;
+  width: 36px;
+  text-align: right;
+  font-weight: 600;
+}
+
+.crash-contributing-factors {
+  display: flex;
+  flex-direction: column;
+}
+
+.crash-factor-item {
+  margin-bottom: 10px;
+}
+
+.crash-factor-bar-bg {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.crash-factor-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #f97316, #ef4444);
+  transition: width 0.5s ease;
+}
+
+.crash-factor-desc {
+  font-size: 12px;
+  color: #aaa;
+  line-height: 1.4;
+}
+
+.crash-timeline-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.crash-durability-chart {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+}
+
+.crash-chart-label {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 8px;
+  text-align: left;
+}
+
+.crash-chart-area {
+  position: relative;
+  height: 60px;
+}
+
+.crash-chart-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.crash-chart-axis {
+  position: absolute;
+  top: 0;
+  right: -30px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #666;
+}
+
+.crash-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-left: 12px;
+}
+
+.crash-timeline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s;
+}
+
+.crash-timeline-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+}
+
+.crash-timeline-item.critical .crash-timeline-label {
+  color: #ef4444;
+}
+
+.crash-timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.crash-timeline-connector {
+  position: absolute;
+  left: 4px;
+  top: 16px;
+  bottom: -6px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.crash-timeline-item:last-child .crash-timeline-connector {
+  display: none;
+}
+
+.crash-timeline-body {
+  flex: 1;
+  text-align: left;
+}
+
+.crash-timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.crash-timeline-icon {
+  font-size: 13px;
+}
+
+.crash-timeline-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ddd;
+}
+
+.crash-timeline-time {
+  font-size: 11px;
+  color: #777;
+  margin-left: auto;
+}
+
+.crash-timeline-desc {
+  font-size: 11px;
+  color: #999;
+  line-height: 1.4;
+}
+
+.crash-timeline-detail {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.crash-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #bbb;
+}
+
+.crash-detail-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.crash-detail-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.crash-detail-damage {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.crash-guidance-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.crash-quick-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 10px;
+  text-align: left;
+}
+
+.crash-quick-tip-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.crash-quick-tip-text {
+  font-size: 13px;
+  color: #fbbf24;
+  line-height: 1.5;
+}
+
+.crash-guidance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.crash-guidance-item {
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  border-left: 3px solid transparent;
+  text-align: left;
+  transition: border-color 0.2s;
+}
+
+.crash-guidance-item.priority-high {
+  border-left-color: #ef4444;
+}
+
+.crash-guidance-item.priority-medium {
+  border-left-color: #f59e0b;
+}
+
+.crash-guidance-item.priority-low {
+  border-left-color: #22c55e;
+}
+
+.crash-guidance-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.crash-guidance-icon {
+  font-size: 16px;
+}
+
+.crash-guidance-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #eee;
+}
+
+.crash-guidance-category {
+  font-size: 10px;
+  color: #888;
+  margin-left: auto;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+}
+
+.crash-guidance-desc {
+  font-size: 12px;
+  color: #aaa;
+  line-height: 1.5;
+}
+
+.crash-recommended-preset {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(34, 197, 94, 0.08);
+  border-radius: 10px;
+}
+
+.crash-preset-label {
+  font-size: 12px;
+  color: #999;
+}
+
+.crash-preset-btn {
+  padding: 5px 14px;
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 8px;
+  color: #22c55e;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.crash-preset-btn:hover {
+  background: rgba(34, 197, 94, 0.3);
+}
+
+.crash-restart-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
+}
+
+.crash-restart-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.4);
+}
+
+.crash-restart-btn:active {
+  transform: translateY(0);
+}
