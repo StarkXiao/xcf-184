@@ -736,6 +736,15 @@ export class GameEngine {
     this.weatherSystem.reconfigure(this.config.worldSize, config);
   }
 
+  public getKiteVelocity(): import('./types').Vector3 | null {
+    if (!this.kite) return null;
+    return {
+      x: this.kite.velocity.x,
+      y: this.kite.velocity.y,
+      z: this.kite.velocity.z,
+    };
+  }
+
   public loadLevelScene(level: LevelScene): void {
     this.currentLevel = level;
     this.loadBuildings(level.buildings);

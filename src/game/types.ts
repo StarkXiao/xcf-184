@@ -479,6 +479,153 @@ export interface ComboVisualEffect {
   text?: string;
 }
 
+export type WindDirectionRelation = 'headwind' | 'tailwind' | 'crosswind_left' | 'crosswind_right' | 'optimal';
+
+export interface WindObservationData {
+  windSpeed: number;
+  windDirection: Vector3;
+  windDirectionAngle: number;
+  kiteVelocityAngle: number;
+  windRelation: WindDirectionRelation;
+  turbulenceLevel: number;
+  gustStrength: number;
+  gustFrequency: number;
+  windAtAltitude: number;
+  recommendedAltitude: number;
+  windHistory: { timestamp: number; speed: number; angle: number }[];
+}
+
+export interface StrategySuggestion {
+  id: string;
+  type: 'flight' | 'weather' | 'safety' | 'optimization';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  title: string;
+  description: string;
+  action?: {
+    type: 'adjust_flight' | 'adjust_weather' | 'adjust_params';
+    params: Record<string, number | string>;
+  };
+  timestamp: number;
+}
+
+export interface UIFlightTip {
+  id: string;
+  type: 'info' | 'warning' | 'danger' | 'success';
+  message: string;
+  icon: string;
+  duration: number;
+  timestamp: number;
+}
+
+export interface TuningPreset {
+  id: string;
+  name: string;
+  description: string;
+  weatherConfig: Partial<WeatherConfig>;
+  flightParams: Partial<FlightParams>;
+  conditions: string[];
+}
+
+export const TUNING_PRESETS: TuningPreset[] = [
+  {
+    id: 'calm_flying',
+    name: '平稳飞行',
+    description: '低风速、低湍流，适合新手练习',
+    weatherConfig: {
+      windSpeed: 0.15,
+      turbulenceLevel: 0.1,
+      cloudCoverage: 0.3,
+    },
+    flightParams: {
+      stabilityFactor: 1.2,
+      maxSpeed: 1.0,
+      windResponse: 0.8,
+    },
+    conditions: ['新手', '练习', '平稳'],
+  },
+  {
+    id: 'speed_demon',
+    name: '极速挑战',
+    description: '高风速、高响应，追求极限速度',
+    weatherConfig: {
+      windSpeed: 0.6,
+      turbulenceLevel: 0.15,
+      cloudCoverage: 0.4,
+    },
+    flightParams: {
+      maxSpeed: 1.8,
+      acceleration: 0.8,
+      windResponse: 1.3,
+      turnRate: 1.2,
+    },
+    conditions: ['高手', '竞速', '挑战'],
+  },
+  {
+    id: 'storm_rider',
+    name: '风暴骑士',
+    description: '极端天气条件，考验操控技术',
+    weatherConfig: {
+      windSpeed: 0.8,
+      turbulenceLevel: 0.6,
+      cloudCoverage: 0.9,
+      forceWeatherEvent: 'suddenStorm',
+    },
+    flightParams: {
+      stabilityFactor: 0.7,
+      maxSpeed: 2.0,
+      dragCoefficient: 0.95,
+      windResponse: 1.5,
+    },
+    conditions: ['专家', '风暴', '高难度'],
+  },
+  {
+    id: 'thermal_hunter',
+    name: '热气流猎手',
+    description: '中等风速，优化升力，追求高度',
+    weatherConfig: {
+      windSpeed: 0.35,
+      turbulenceLevel: 0.25,
+      cloudCoverage: 0.5,
+    },
+    flightParams: {
+      liftForce: 0.025,
+      maxAltitude: 350,
+      stabilityFactor: 0.9,
+      dragCoefficient: 0.97,
+    },
+    conditions: ['高度', '气流', '探索'],
+  },
+  {
+    id: 'precision_flying',
+    name: '精准操控',
+    description: '优化转向和稳定性，适合障碍穿越',
+    weatherConfig: {
+      windSpeed: 0.25,
+      turbulenceLevel: 0.1,
+      cloudCoverage: 0.2,
+    },
+    flightParams: {
+      turnRate: 1.5,
+      stabilityFactor: 1.3,
+      acceleration: 0.6,
+      windResponse: 0.9,
+    },
+    conditions: ['障碍', '精准', '任务'],
+  },
+];
+
+export const WEATHER_SAFETY_THRESHOLDS = {
+  safeWindSpeed: 0.4,
+  warningWindSpeed: 0.6,
+  dangerWindSpeed: 0.8,
+  safeTurbulence: 0.3,
+  warningTurbulence: 0.5,
+  dangerTurbulence: 0.7,
+  safeGustStrength: 0.3,
+  warningGustStrength: 0.5,
+  dangerGustStrength: 0.7,
+};
+
 export const DIFFICULTY_PRESETS: Record<string, Partial<GameConfig>> = {
   easy: {
     durabilityConfig: {

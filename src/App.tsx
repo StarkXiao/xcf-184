@@ -1,15 +1,32 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { GameEngine } from './game/GameEngine';
-import type { GameState, GameStats } from './game/types';
+import type {
+  GameState,
+  GameStats,
+  WindFieldConfig,
+  WeatherConfig,
+  FlightParams,
+  WindObservationData,
+  StrategySuggestion,
+  UIFlightTip,
+  TuningPreset,
+} from './game/types';
 import {
   DEFAULT_GAME_CONFIG,
   DEFAULT_COMBO_FLOW_STATE,
   DEFAULT_OBSTACLE_STATS,
+  DEFAULT_WIND_FIELD,
+  DEFAULT_WEATHER,
 } from './game/types';
 import { MainMenu } from './components/MainMenu';
 import { GameHUD } from './components/GameHUD';
 import { PauseMenu } from './components/PauseMenu';
 import { GameOverScreen } from './components/GameOverScreen';
+import { WindObservationPanel } from './components/WindObservationPanel';
+import { ManualTuningPanel } from './components/ManualTuningPanel';
+import { FlightTips } from './components/FlightTips';
+import { StrategyEngine } from './game/StrategyEngine';
+import type { Vector3 } from './game/types';
 import { Workshop } from './workshop/components/Workshop';
 import { useWorkshop } from './workshop/useWorkshop';
 import { TournamentCenter } from './tournament';
@@ -57,6 +74,7 @@ import './festival/festival.css';
 import './mapExplore/mapExplore.css';
 import './replay/replay.css';
 import './stageTask/stageTask.css';
+import './components/windObservation.css';
 
 const DEFAULT_STATS: GameStats = {
   score: 0,
@@ -151,6 +169,18 @@ function App() {
   const lastSettlementKeyRef = useRef<string | null>(null);
   const difficultyRef = useRef<'easy' | 'normal' | 'hard' | 'extreme'>('normal');
 
+  const [showWindObservation, setShowWindObservation] = useState(true);
+  const [showManualTuning, setShowManualTuning] = useState(false);
+  const [windObservation, setWindObservation] = useState<WindObservationData | null>(null);
+  const [strategySuggestions, setStrategySuggestions] = useState<StrategySuggestion[]>([]);
+  const [activeTips, setActiveTips] = useState<UIFlightTip[]>([]);
+  const [currentWindField, setCurrentWindField] = useState<WindFieldConfig>(DEFAULT_WIND_FIELD);
+  const [currentWeatherConfig, setCurrentWeatherConfig] = useState<WeatherConfig>(DEFAULT_WEATHER);
+  const [currentFlightParams, setCurrentFlightParams] = useState<FlightParams | null>(null);
+
+  const strategyEngineRef = useRef<StrategyEngine>(new StrategyEngine());
+  const analysisIntervalRef = useRef<number | null>(null);
+
   const workshop = useWorkshop();
   const journey = useJourney();
   const stageTask = useStageTask();
@@ -210,6 +240,119 @@ function App() {
     if (!stageTask.isDifficultyUnlocked(newDifficulty)) return;
     setDifficulty(newDifficulty);
   }, [stageTask]);
+
+  const handleWindFieldChange = useCallback((config: Partial<WindFieldConfig>) => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.setWindField(config);
+      const updatedField = gameEngineRef.current.getWindField();
+      if (updatedField) {
+        setCurrentWindField(updatedField);
+      }
+    }
+  }, []);
+
+  const handleWeatherConfigChange = useCallback((config: Partial<WeatherConfig>) => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.setWeatherConfig(config);
+      const weatherConfig = gameEngineRef.current.getWeatherConfig();
+      if (weatherConfig) {
+        setCurrentWeatherConfig(weatherConfig);
+      }
+    }
+  }, []);
+
+  const handleFlightParamsChange = useCallback((params: Partial<FlightParams>) => {
+    if (gameEngineRef.current) {
+      const currentParams = gameEngineRef.current.getFlightParams();
+      if (currentParams) {
+        const newParams = { ...currentParams, ...params };
+        gameEngineRef.current.setFlightParams(newParams);
+        setCurrentFlightParams(newParams);
+      }
+    }
+  }, []);
+
+  const handleApplyPreset = useCallback((preset: TuningPreset) => {
+    if (gameEngineRef.current) {
+      if (preset.weatherConfig) {
+        gameEngineRef.current.setWeatherConfig(preset.weatherConfig);
+        if (preset.weatherConfig.windField) {
+          gameEngineRef.current.setWindField(preset.weatherConfig.windField);
+        }
+      }
+      if (preset.flightParams) {
+        const currentParams = gameEngineRef.current.getFlightParams();
+        if (currentParams) {
+          const newParams = { ...currentParams, ...preset.flightParams };
+          gameEngineRef.current.setFlightParams(newParams);
+          setCurrentFlightParams(newParams);
+        }
+      }
+
+      const weatherConfig = gameEngineRef.current.getWeatherConfig();
+      const windField = gameEngineRef.current.getWindField();
+      if (weatherConfig) setCurrentWeatherConfig(weatherConfig);
+      if (windField) setCurrentWindField(windField);
+    }
+  }, []);
+
+  const handleResetTuning = useCallback(() => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.setWindField(DEFAULT_WIND_FIELD);
+      gameEngineRef.current.setWeatherConfig(DEFAULT_WEATHER);
+      gameEngineRef.current.setFlightParams(workshop.flightParams);
+
+      setCurrentWindField(DEFAULT_WIND_FIELD);
+      setCurrentWeatherConfig(DEFAULT_WEATHER);
+      setCurrentFlightParams(workshop.flightParams);
+    }
+  }, [workshop.flightParams]);
+
+  const runStrategyAnalysis = useCallback(() => {
+    if (!gameEngineRef.current || gameStateRef.current !== 'playing') return;
+
+    const weatherConfig = gameEngineRef.current.getWeatherConfig();
+    const windField = gameEngineRef.current.getWindField();
+    const flightParams = gameEngineRef.current.getFlightParams();
+    const kiteVelocityVec = gameEngineRef.current.getKiteVelocity();
+
+    if (weatherConfig && windField && flightParams && kiteVelocityVec) {
+      const velocity: Vector3 = {
+        x: kiteVelocityVec.x,
+        y: kiteVelocityVec.y,
+        z: kiteVelocityVec.z,
+      };
+
+      const result = strategyEngineRef.current.analyze(
+        stats,
+        weatherConfig,
+        windField,
+        flightParams,
+        velocity,
+        Date.now()
+      );
+
+      setWindObservation(result.observation);
+      setCurrentWindField(windField);
+      setCurrentWeatherConfig(weatherConfig);
+      setCurrentFlightParams(flightParams);
+
+      if (result.suggestions.length > 0) {
+        setStrategySuggestions((prev) => {
+          const combined = [...prev, ...result.suggestions];
+          const unique = combined.filter(
+            (s, index, self) =>
+              index === self.findIndex((t) => t.id === s.id)
+          );
+          return unique.slice(-20);
+        });
+      }
+
+      if (result.tips.length > 0) {
+        setActiveTips(result.tips);
+      }
+    }
+  }, [stats]);
 
   const handleStatsUpdate = useCallback((newStats: GameStats) => {
     setStats(newStats);
@@ -587,12 +730,56 @@ function App() {
   }, [journey, stageTask]);
 
   useEffect(() => {
+    if (gameState === 'playing') {
+      if (analysisIntervalRef.current) {
+        clearInterval(analysisIntervalRef.current);
+      }
+      analysisIntervalRef.current = window.setInterval(() => {
+        runStrategyAnalysis();
+      }, 500);
+    } else {
+      if (analysisIntervalRef.current) {
+        clearInterval(analysisIntervalRef.current);
+        analysisIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (analysisIntervalRef.current) {
+        clearInterval(analysisIntervalRef.current);
+      }
+    };
+  }, [gameState, runStrategyAnalysis]);
+
+  useEffect(() => {
+    if (isInitialized && gameEngineRef.current) {
+      const weatherConfig = gameEngineRef.current.getWeatherConfig();
+      const windField = gameEngineRef.current.getWindField();
+      const flightParams = gameEngineRef.current.getFlightParams();
+      
+      if (weatherConfig) setCurrentWeatherConfig(weatherConfig);
+      if (windField) setCurrentWindField(windField);
+      if (flightParams) setCurrentFlightParams(flightParams);
+    }
+  }, [isInitialized]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
         if (gameState === 'playing') {
           gameEngineRef.current?.pause();
         } else if (gameState === 'paused') {
           gameEngineRef.current?.resume();
+        }
+      }
+      if (e.key === 'o' || e.key === 'O') {
+        if (gameState === 'playing') {
+          setShowWindObservation((prev) => !prev);
+        }
+      }
+      if (e.key === 't' || e.key === 'T') {
+        if (gameState === 'playing') {
+          setShowManualTuning((prev) => !prev);
         }
       }
     };
@@ -614,6 +801,11 @@ function App() {
   };
 
   const handleRestart = () => {
+    strategyEngineRef.current.clear();
+    setWindObservation(null);
+    setStrategySuggestions([]);
+    setActiveTips([]);
+
     const currentTrackId = tournamentTrackIdRef.current;
     if (currentTrackId) {
       const success = tournamentEngine.selectTrack(currentTrackId);
@@ -1098,6 +1290,51 @@ function App() {
       {gameState === 'playing' && (
         <>
           <GameHUD stats={stats} onPause={handlePause} />
+          
+          <FlightTips tips={activeTips} />
+
+          {showWindObservation && (
+            <div className="hud-right-extra">
+              <WindObservationPanel
+                observation={windObservation}
+                tips={activeTips}
+                onClose={() => setShowWindObservation(false)}
+              />
+            </div>
+          )}
+
+          {showManualTuning && (
+            <ManualTuningPanel
+              windField={currentWindField}
+              flightParams={currentFlightParams}
+              weatherConfig={currentWeatherConfig}
+              suggestions={strategySuggestions}
+              onWindFieldChange={handleWindFieldChange}
+              onFlightParamsChange={handleFlightParamsChange}
+              onWeatherConfigChange={handleWeatherConfigChange}
+              onApplyPreset={handleApplyPreset}
+              onReset={handleResetTuning}
+              onClose={() => setShowManualTuning(false)}
+            />
+          )}
+
+          <div className="hud-toggle-buttons">
+            <button
+              className={`hud-toggle-btn ${showWindObservation ? 'active' : ''}`}
+              onClick={() => setShowWindObservation((prev) => !prev)}
+              title="风向观测 (O)"
+            >
+              🌬️
+            </button>
+            <button
+              className={`hud-toggle-btn ${showManualTuning ? 'active' : ''}`}
+              onClick={() => setShowManualTuning((prev) => !prev)}
+              title="手动调参 (T)"
+            >
+              ⚙️
+            </button>
+          </div>
+
           {stageIdRef.current && (
             <StageTaskHUD
               currentStage={stageTask.getCurrentStage()}
@@ -1142,6 +1379,9 @@ function App() {
               onResume={handleResume}
               onRestart={handleRestart}
               onMainMenu={handleMainMenu}
+              suggestions={strategySuggestions}
+              observation={windObservation}
+              stats={stats}
             />
           )}
         </>
