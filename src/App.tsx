@@ -18,6 +18,7 @@ import {
   DEFAULT_OBSTACLE_STATS,
   DEFAULT_WIND_FIELD,
   DEFAULT_WEATHER,
+  TUNING_PRESETS,
 } from './game/types';
 import { MainMenu } from './components/MainMenu';
 import { GameHUD } from './components/GameHUD';
@@ -304,6 +305,13 @@ function App() {
       if (windField) setCurrentWindField(windField);
     }
   }, []);
+
+  const handleApplyCrashPreset = useCallback((presetId: string) => {
+    const preset = TUNING_PRESETS.find(p => p.id === presetId);
+    if (preset) {
+      handleApplyPreset(preset);
+    }
+  }, [handleApplyPreset]);
 
   const handleResetTuning = useCallback(() => {
     if (gameEngineRef.current) {
@@ -1470,7 +1478,7 @@ function App() {
           newAchievements={gameNewAchievements}
           newTitles={gameNewTitles}
           crashAnalysis={crashAnalysis}
-          onApplyPreset={handleApplyPreset}
+          onApplyPreset={handleApplyCrashPreset}
           onRestart={handleRestart}
           onMainMenu={handleMainMenu}
           onWorkshop={handleOpenWorkshop}
