@@ -319,6 +319,37 @@ export interface FlightParams {
   turnRate: number;
 }
 
+export interface ZoneBuildConfig {
+  zoneId: string;
+  boundingBox: {
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+  };
+  buildingDensity: number;
+  minBuildingHeight: number;
+  maxBuildingHeight: number;
+  buildingStyle: 'modern' | 'traditional' | 'industrial' | 'ancient' | 'futuristic' | 'mixed';
+  colorPalette?: number[];
+  specialEffect?: string;
+}
+
+export interface ZoneAirCurrentConfig {
+  zoneId: string;
+  baseSpawnRate: number;
+  preferredTypes: Array<'updraft' | 'downdraft' | 'turbulence'>;
+  minStrength: number;
+  maxStrength: number;
+  radiusMultiplier: number;
+  permanentCurrentPositions?: Array<{
+    position: Vector3;
+    type: 'updraft' | 'downdraft' | 'turbulence';
+    strength: number;
+    radius: number;
+  }>;
+}
+
 export interface GameConfig {
   worldSize: number;
   kiteSpeed: number;
@@ -340,6 +371,16 @@ export interface GameConfig {
   difficultyPreset?: 'easy' | 'normal' | 'hard' | 'extreme';
   weatherEventConfig?: WeatherEventConfig;
   obstacleConfig?: ObstacleConfig;
+  regionId?: string;
+  buildingSeed?: number;
+  zoneConfigs?: ZoneBuildConfig[];
+  zoneAirCurrentConfigs?: ZoneAirCurrentConfig[];
+  flightObjectiveModifiers?: {
+    distanceMultiplier?: number;
+    heightMultiplier?: number;
+    scoreMultiplier?: number;
+    airCurrentBonus?: number;
+  };
 }
 
 export const DEFAULT_WEATHER_EVENT_CONFIG: WeatherEventConfig = {

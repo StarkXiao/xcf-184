@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Building, GameConfig, LightningStrike, WeatherEventType } from './types';
+import type { Building, GameConfig, LightningStrike, WeatherEventType, ZoneBuildConfig } from './types';
 
 export class SceneManager {
   public scene: THREE.Scene;
@@ -22,10 +22,22 @@ export class SceneManager {
   private targetFogNear: number;
   private targetFogFar: number;
   private lightningFlashIntensity: number = 0;
+  private buildingSeed: number = 0;
+  private zoneConfigs: ZoneBuildConfig[] = [];
+
+  private seededRandom(seed: number): () => number {
+    let s = seed;
+    return () => {
+      s = (s * 9301 + 49297) % 233280;
+      return s / 233280;
+    };
+  }
 
   constructor(container: HTMLElement, config: GameConfig) {
     this.config = config;
     this.buildingGroup = new THREE.Group();
+    this.buildingSeed = config.buildingSeed ?? Date.now();
+    this.zoneConfigs = config.zoneConfigs ?? [];
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x87ceeb);
@@ -130,43 +142,65 @@ export class SceneManager {
   }
 
   private initBuildings(): void {
-    const colors = [
+    const defaultColors = [
       0x8b4513, 0xa0522d, 0x696969, 0x708090, 0x4682b4,
       0xd2b48c, 0xb8860b, 0xcd853f, 0x808080, 0x556b2f,
     ];
 
+    const random = this.seededRandom(this.buildingSeed);
     const gridSize = 12;
     const spacing = this.config.worldSize / gridSize;
+    const half = this.config.worldSize / 2;
+
+    const getZoneForPosition = (x: number, z: number): ZoneBuildConfig | null => {
+      for (const zone of this.zoneConfigs) {
+        const bb = zone.boundingBox;
+        if (x >= bb.minX && x <= bb.maxX && z >= bb.minZ && z <= bb.maxZ) {
+          return zone;
+        }
+      }
+      return null;
+    };
 
     for (let x = -gridSize / 2; x < gridSize / 2; x++) {
       for (let z = -gridSize / 2; z < gridSize / 2; z++) {
         if (Math.abs(x) < 1 && Math.abs(z) < 1) continue;
-        if (Math.random() > this.config.buildingDensity) continue;
 
-        const height =
-          this.config.minBuildingHeight +
-          Math.random() *
-            (this.config.maxBuildingHeight - this.config.minBuildingHeight);
-        const width = spacing * (0.5 + Math.random() * 0.4);
-        const depth = spacing * (0.5 + Math.random() * 0.4);
+        const posX = x * spacing + (random() - 0.5) * spacing * 0.3;
+        const posZ = z * spacing + (random() - 0.5) * spacing * 0.3;
 
-        const posX = x * spacing + (Math.random() - 0.5) * spacing * 0.3;
-        const posZ = z * spacing + (Math.random() - 0.5) * spacing * 0.3;
+        if (Math.abs(posX) > half || Math.abs(posZ) > half) continue;
+
+        const zone = getZoneForPosition(posX, posZ);
+        const density = zone ? zone.buildingDensity : this.config.buildingDensity;
+        const minHeight = zone ? zone.minBuildingHeight : this.config.minBuildingHeight;
+        const maxHeight = zone ? zone.maxBuildingHeight : this.config.maxBuildingHeight;
+        const colors = zone?.colorPalette && zone.colorPalette.length > 0
+          ? zone.colorPalette
+          : defaultColors;
+        const zoneId = zone?.zoneId;
+
+        if (random() > density) continue;
+
+        const height = minHeight + random() * (maxHeight - minHeight);
+        const width = spacing * (0.5 + random() * 0.4);
+        const depth = spacing * (0.5 + random() * 0.4);
 
         const buildingData: Building = {
-          id: `building-${x}-${z}`,
+          id: `building-${zoneId || 'default'}-${x}-${z}`,
+          zoneId: zoneId,
           position: { x: posX, y: height / 2, z: posZ },
           width,
           height,
           depth,
-          color: colors[Math.floor(Math.random() * colors.length)],
+          color: colors[Math.floor(random() * colors.length)],
         };
 
         const geometry = new THREE.BoxGeometry(width, height, depth);
         const material = new THREE.MeshStandardMaterial({
           color: buildingData.color,
-          roughness: 0.7,
-          metalness: 0.2,
+          roughness: this.getRoughnessForStyle(zone?.buildingStyle),
+          metalness: this.getMetalnessForStyle(zone?.buildingStyle),
         });
 
         const mesh = new THREE.Mesh(geometry, material);
@@ -174,28 +208,76 @@ export class SceneManager {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
-        const roofHeight = 1 + Math.random() * 3;
-        const roofGeometry = new THREE.BoxGeometry(
-          width * 0.9,
-          roofHeight,
-          depth * 0.9
-        );
-        const roofMaterial = new THREE.MeshStandardMaterial({
-          color: 0x3d3d3d,
-          roughness: 0.8,
-          metalness: 0.1,
-        });
-        const roof = new THREE.Mesh(roofGeometry, roofMaterial);
-        roof.position.y = height / 2 + roofHeight / 2;
-        roof.castShadow = true;
-        roof.receiveShadow = true;
-        mesh.add(roof);
+        const roofHeight = this.getRoofHeightForStyle(height, zone?.buildingStyle, random);
+        if (roofHeight > 0) {
+          const roofGeometry = new THREE.BoxGeometry(
+            width * 0.9,
+            roofHeight,
+            depth * 0.9
+          );
+          const roofMaterial = new THREE.MeshStandardMaterial({
+            color: this.getRoofColorForStyle(zone?.buildingStyle),
+            roughness: 0.8,
+            metalness: 0.1,
+          });
+          const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+          roof.position.y = height / 2 + roofHeight / 2;
+          roof.castShadow = true;
+          roof.receiveShadow = true;
+          mesh.add(roof);
+        }
 
-        this.addWindows(mesh, width, height, depth);
+        if (height > 10) {
+          this.addWindows(mesh, width, height, depth);
+        }
 
         this.buildings.push({ mesh, data: buildingData });
         this.buildingGroup.add(mesh);
       }
+    }
+  }
+
+  private getRoughnessForStyle(style?: string): number {
+    switch (style) {
+      case 'modern': return 0.5;
+      case 'futuristic': return 0.3;
+      case 'industrial': return 0.85;
+      case 'ancient': return 0.9;
+      case 'traditional': return 0.8;
+      default: return 0.7;
+    }
+  }
+
+  private getMetalnessForStyle(style?: string): number {
+    switch (style) {
+      case 'modern': return 0.4;
+      case 'futuristic': return 0.7;
+      case 'industrial': return 0.3;
+      case 'ancient': return 0.05;
+      case 'traditional': return 0.1;
+      default: return 0.2;
+    }
+  }
+
+  private getRoofHeightForStyle(height: number, style: string | undefined, random: () => number): number {
+    switch (style) {
+      case 'ancient': return Math.max(2, height * 0.15) + random() * 2;
+      case 'traditional': return 1 + random() * 4;
+      case 'futuristic': return random() < 0.3 ? 0 : 0.5 + random() * 1.5;
+      case 'industrial': return 0.5 + random() * 1.5;
+      case 'modern': return random() < 0.5 ? 0 : 0.5 + random() * 2;
+      default: return 1 + random() * 3;
+    }
+  }
+
+  private getRoofColorForStyle(style?: string): number {
+    switch (style) {
+      case 'ancient': return 0x8b4513;
+      case 'traditional': return 0x3d3d3d;
+      case 'futuristic': return 0x4a4a6a;
+      case 'industrial': return 0x5a5a5a;
+      case 'modern': return 0x2d2d2d;
+      default: return 0x3d3d3d;
     }
   }
 
@@ -393,6 +475,8 @@ export class SceneManager {
 
   public reconfigure(config: GameConfig): void {
     this.config = config;
+    this.buildingSeed = config.buildingSeed ?? this.buildingSeed;
+    this.zoneConfigs = config.zoneConfigs ?? this.zoneConfigs;
     this.clearBuildings();
     this.windowMaterials = [];
     this.initBuildings();

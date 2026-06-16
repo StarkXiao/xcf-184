@@ -1,4 +1,194 @@
-import type { Region, BuildingCluster, RareAirCurrent, StoryEvent, Stage, MapExploreState, RegionProgress, BuildingClusterStatus, RareAirCurrentStatus, StoryEventStatus, StageStatus } from './types';
+import type { Region, BuildingCluster, RareAirCurrent, StoryEvent, Stage, MapExploreState, RegionProgress, BuildingClusterStatus, RareAirCurrentStatus, StoryEventStatus, StageStatus, ZoneConfig, SpecialAirCurrentZoneConfig, RegionRefreshConfig, ZoneExplorationState, BoundingBox } from './types';
+
+function generateDefaultZones(regionId: string, worldSize: number, terrain: string): ZoneConfig[] {
+  const half = worldSize / 2;
+  const zones: ZoneConfig[] = [];
+  const zoneSize = worldSize / 3;
+
+  const zoneConfigsByTerrain: Record<string, Array<{ id: string; name: string; type: ZoneConfig['type']; style: ZoneConfig['buildingStyle']; density: number; minH: number; maxH: number; desc: string; effect?: string }>> = {
+    urban: [
+      { id: `${regionId}_zone_residential`, name: '居民区', type: 'residential', style: 'traditional', density: 0.45, minH: 10, maxH: 25, desc: '传统居民区，低矮建筑适合低空练习' },
+      { id: `${regionId}_zone_historical`, name: '历史中心', type: 'historical', style: 'traditional', density: 0.5, minH: 15, maxH: 35, desc: '历史建筑集中区，屋顶有特殊上升气流', effect: 'updraft_boost' },
+      { id: `${regionId}_zone_commercial`, name: '商业区', type: 'commercial', style: 'mixed', density: 0.4, minH: 20, maxH: 50, desc: '商业店铺区域，建筑高度各异' },
+      { id: `${regionId}_zone_alley`, name: '巷道区', type: 'residential', style: 'traditional', density: 0.55, minH: 8, maxH: 20, desc: '密集窄巷，考验操控能力', effect: 'narrow_passage' },
+    ],
+    coastal: [
+      { id: `${regionId}_zone_waterfront`, name: '滨水区', type: 'waterfront', style: 'modern', density: 0.35, minH: 20, maxH: 60, desc: '沿河区域，水面制造独特气流', effect: 'river_wind' },
+      { id: `${regionId}_zone_highrise`, name: '摩天区', type: 'highrise', style: 'modern', density: 0.3, minH: 50, maxH: 90, desc: '高楼林立，塔间形成风洞', effect: 'wind_tunnel' },
+      { id: `${regionId}_zone_dock`, name: '码头区', type: 'waterfront', style: 'industrial', density: 0.4, minH: 12, maxH: 30, desc: '码头仓库，低矮建筑区' },
+      { id: `${regionId}_zone_bridge`, name: '桥区', type: 'commercial', style: 'mixed', density: 0.35, minH: 20, maxH: 40, desc: '桥梁附近，桥下有上升气流', effect: 'bridge_updraft' },
+    ],
+    mountain: [
+      { id: `${regionId}_zone_valley`, name: '山谷', type: 'mountain_side', style: 'traditional', density: 0.2, minH: 15, maxH: 35, desc: '山谷底部，穿堂风频繁', effect: 'valley_wind' },
+      { id: `${regionId}_zone_slope`, name: '山腰', type: 'mountain_side', style: 'traditional', density: 0.25, minH: 20, maxH: 45, desc: '山腰村落，热气流活跃' },
+      { id: `${regionId}_zone_peak`, name: '山顶', type: 'mountain_side', style: 'ancient', density: 0.15, minH: 30, maxH: 60, desc: '山巅区域，可遇最强气流', effect: 'peak_turbulence' },
+      { id: `${regionId}_zone_temple`, name: '古寺区', type: 'historical', style: 'ancient', density: 0.2, minH: 25, maxH: 55, desc: '古寺区域，热气流聚焦', effect: 'thermal_focus' },
+    ],
+    industrial: [
+      { id: `${regionId}_zone_factory`, name: '厂房区', type: 'industrial', style: 'industrial', density: 0.5, minH: 18, maxH: 38, desc: '工厂屋顶排放热气形成稳定上升流', effect: 'heat_updraft' },
+      { id: `${regionId}_zone_chimney`, name: '烟囱区', type: 'industrial', style: 'industrial', density: 0.55, minH: 30, maxH: 60, desc: '密集烟囱，多股独立上升气流', effect: 'multi_updraft' },
+      { id: `${regionId}_zone_bridge_steel`, name: '钢桥区', type: 'industrial', style: 'industrial', density: 0.4, minH: 25, maxH: 50, desc: '钢铁桥梁间暗藏风洞', effect: 'bridge_tunnel' },
+      { id: `${regionId}_zone_storage`, name: '仓储区', type: 'industrial', style: 'industrial', density: 0.45, minH: 12, maxH: 28, desc: '仓库区域，建筑排列整齐' },
+    ],
+    ancient: [
+      { id: `${regionId}_zone_cathedral`, name: '大殿区', type: 'historical', style: 'ancient', density: 0.35, minH: 35, maxH: 60, desc: '古代殿堂，内部有奇异气流', effect: 'ancient_resonance' },
+      { id: `${regionId}_zone_pillars`, name: '石柱区', type: 'historical', style: 'ancient', density: 0.45, minH: 18, maxH: 42, desc: '密集石柱，窄间距考验精准操控', effect: 'pillar_slalom' },
+      { id: `${regionId}_zone_chamber`, name: '地下厅', type: 'historical', style: 'ancient', density: 0.25, minH: 45, maxH: 70, desc: '巨大空腔，气流汇聚旋转', effect: 'vortex_chamber' },
+      { id: `${regionId}_zone_ruins`, name: '外遗迹', type: 'park', style: 'ancient', density: 0.3, minH: 15, maxH: 35, desc: '外围遗迹，气流温和' },
+    ],
+    sky_island: [
+      { id: `${regionId}_zone_palace`, name: '云中宫', type: 'sky_platform', style: 'futuristic', density: 0.3, minH: 40, maxH: 75, desc: '漂浮宫殿，云层产生额外升力', effect: 'cloud_lift' },
+      { id: `${regionId}_zone_dock`, name: '天空码头', type: 'sky_platform', style: 'futuristic', density: 0.35, minH: 25, maxH: 50, desc: '岛间连接通道，强风贯穿', effect: 'crosswind' },
+      { id: `${regionId}_zone_shrine`, name: '风神殿', type: 'historical', style: 'ancient', density: 0.2, minH: 50, maxH: 85, desc: '掌控气流起源的圣地', effect: 'wind_origin' },
+      { id: `${regionId}_zone_bridge_sky`, name: '云桥区', type: 'waterfront', style: 'futuristic', density: 0.25, minH: 35, maxH: 65, desc: '连接浮岛的云桥区域', effect: 'cloud_bridge' },
+    ],
+  };
+
+  const configs = zoneConfigsByTerrain[terrain] || zoneConfigsByTerrain.urban;
+  const positions = [
+    { minX: -half, maxX: -half + zoneSize, minZ: -half, maxZ: -half + zoneSize },
+    { minX: -half + zoneSize, maxX: half - zoneSize, minZ: -half, maxZ: -half + zoneSize },
+    { minX: half - zoneSize, maxX: half, minZ: -half, maxZ: -half + zoneSize },
+    { minX: -half, maxX: -half + zoneSize, minZ: half - zoneSize, maxZ: half },
+  ];
+
+  configs.forEach((cfg, idx) => {
+    const pos = positions[idx] || positions[0];
+    const bbox: BoundingBox = pos;
+    zones.push({
+      id: cfg.id,
+      name: cfg.name,
+      type: cfg.type,
+      boundingBox: bbox,
+      centerPosition: {
+        x: (bbox.minX + bbox.maxX) / 2,
+        y: (bbox.minZ + bbox.maxZ) / 2,
+      },
+      baseBuildingDensity: cfg.density,
+      minBuildingHeight: cfg.minH,
+      maxBuildingHeight: cfg.maxH,
+      buildingStyle: cfg.style,
+      specialEffect: cfg.effect,
+      description: cfg.desc,
+    });
+  });
+
+  return zones;
+}
+
+function generateZoneAirCurrentConfigs(regionId: string, zones: ZoneConfig[], terrain: string): SpecialAirCurrentZoneConfig[] {
+  return zones.map((zone) => {
+    const baseConfig: SpecialAirCurrentZoneConfig = {
+      zoneId: zone.id,
+      baseSpawnRate: 0.02,
+      preferredTypes: ['updraft', 'turbulence'],
+      minStrength: 0.06,
+      maxStrength: 0.18,
+      radiusMultiplier: 1.0,
+    };
+
+    if (zone.specialEffect?.includes('updraft') || zone.type === 'mountain_side' || zone.type === 'industrial') {
+      baseConfig.preferredTypes = ['updraft', 'updraft', 'turbulence'];
+      baseConfig.minStrength = 0.08;
+      baseConfig.maxStrength = 0.25;
+      baseConfig.baseSpawnRate = 0.028;
+      baseConfig.radiusMultiplier = 1.2;
+    }
+
+    if (zone.specialEffect?.includes('wind_tunnel') || zone.specialEffect?.includes('tunnel')) {
+      baseConfig.preferredTypes = ['updraft', 'turbulence', 'turbulence'];
+      baseConfig.maxStrength = 0.28;
+      baseConfig.radiusMultiplier = 1.15;
+    }
+
+    if (zone.type === 'park' || zone.type === 'waterfront') {
+      baseConfig.preferredTypes = ['updraft', 'downdraft'];
+      baseConfig.minStrength = 0.05;
+      baseConfig.maxStrength = 0.16;
+      baseConfig.baseSpawnRate = 0.018;
+    }
+
+    if (zone.specialEffect === 'vortex_chamber' || zone.specialEffect === 'peak_turbulence') {
+      baseConfig.preferredTypes = ['turbulence', 'turbulence', 'updraft'];
+      baseConfig.minStrength = 0.1;
+      baseConfig.maxStrength = 0.3;
+      baseConfig.baseSpawnRate = 0.032;
+      baseConfig.radiusMultiplier = 1.3;
+    }
+
+    if (terrain === 'sky_island') {
+      baseConfig.minStrength *= 1.2;
+      baseConfig.maxStrength *= 1.2;
+      baseConfig.baseSpawnRate *= 1.2;
+    }
+
+    return baseConfig;
+  });
+}
+
+function generateRefreshConfig(terrain: string): RegionRefreshConfig {
+  const baseTriggers: RegionRefreshConfig['triggers'] = ['flight_complete', 'building_explored', 'stage_complete'];
+
+  const configByTerrain: Record<string, Partial<RegionRefreshConfig>> = {
+    urban: { maxRefreshesPerSession: 3, buildingDensityVariance: 0.1 },
+    coastal: { maxRefreshesPerSession: 4, buildingDensityVariance: 0.15, triggers: [...baseTriggers, 'story_complete'] },
+    mountain: { maxRefreshesPerSession: 5, buildingDensityVariance: 0.2, triggers: [...baseTriggers, 'region_enter'] },
+    industrial: { maxRefreshesPerSession: 4, buildingDensityVariance: 0.18, triggers: [...baseTriggers, 'story_complete'] },
+    ancient: { maxRefreshesPerSession: 2, buildingDensityVariance: 0.12, preserveExploredBuildings: true },
+    sky_island: { maxRefreshesPerSession: 6, buildingDensityVariance: 0.25, triggers: [...baseTriggers, 'region_enter', 'story_complete'], airCurrentRefreshOnZoneEntry: true },
+  };
+
+  const cfg = configByTerrain[terrain] || {};
+  return {
+    enabled: true,
+    triggers: cfg.triggers || baseTriggers,
+    maxRefreshesPerSession: cfg.maxRefreshesPerSession ?? 3,
+    buildingDensityVariance: cfg.buildingDensityVariance ?? 0.15,
+    preserveExploredBuildings: cfg.preserveExploredBuildings ?? false,
+    airCurrentRefreshOnZoneEntry: cfg.airCurrentRefreshOnZoneEntry ?? false,
+  };
+}
+
+function generateFlightObjectiveModifiers(terrain: string): Region['flightObjectiveModifiers'] {
+  const modifiers: Record<string, Region['flightObjectiveModifiers']> = {
+    urban: { distanceMultiplier: 1.0, scoreMultiplier: 1.0 },
+    coastal: { distanceMultiplier: 1.1, airCurrentBonus: 5 },
+    mountain: { heightMultiplier: 1.2, airCurrentBonus: 10 },
+    industrial: { scoreMultiplier: 1.1, airCurrentBonus: 8 },
+    ancient: { scoreMultiplier: 1.15, distanceMultiplier: 1.05 },
+    sky_island: { heightMultiplier: 1.3, scoreMultiplier: 1.2, airCurrentBonus: 15 },
+  };
+  return modifiers[terrain];
+}
+
+function createZoneExplorationStates(zones: ZoneConfig[]): Record<string, ZoneExplorationState> {
+  const states: Record<string, ZoneExplorationState> = {};
+  zones.forEach((zone) => {
+    const estimatedBuildings = Math.floor(
+      ((zone.boundingBox.maxX - zone.boundingBox.minX) / 12) *
+      ((zone.boundingBox.maxZ - zone.boundingBox.minZ) / 12) *
+      zone.baseBuildingDensity
+    );
+    states[zone.id] = {
+      zoneId: zone.id,
+      entered: false,
+      exploredBuildingsCount: 0,
+      totalBuildingsInZone: Math.max(3, estimatedBuildings),
+      explorationPercent: 0,
+      flightsEntered: 0,
+      firstEnteredAt: null,
+      lastVisitedAt: null,
+    };
+  });
+  return states;
+}
+
+const OLD_TOWN_ZONES = generateDefaultZones('region_old_town', 400, 'urban');
+const RIVERSIDE_ZONES = generateDefaultZones('region_riverside', 500, 'coastal');
+const MOUNTAIN_ZONES = generateDefaultZones('region_mountain_peak', 600, 'mountain');
+const INDUSTRIAL_ZONES = generateDefaultZones('region_industrial', 500, 'industrial');
+const ANCIENT_ZONES = generateDefaultZones('region_ancient_ruins', 550, 'ancient');
+const SKY_ISLAND_ZONES = generateDefaultZones('region_sky_island', 700, 'sky_island');
 
 export const REGIONS: Region[] = [
   {
@@ -23,6 +213,10 @@ export const REGIONS: Region[] = [
     buildingDensity: 0.35,
     turbulenceLevel: 0.15,
     cloudCoverage: 0.3,
+    zones: OLD_TOWN_ZONES,
+    zoneAirCurrentConfigs: generateZoneAirCurrentConfigs('region_old_town', OLD_TOWN_ZONES, 'urban'),
+    refreshConfig: generateRefreshConfig('urban'),
+    flightObjectiveModifiers: generateFlightObjectiveModifiers('urban'),
   },
   {
     id: 'region_riverside',
@@ -47,6 +241,10 @@ export const REGIONS: Region[] = [
     buildingDensity: 0.4,
     turbulenceLevel: 0.2,
     cloudCoverage: 0.4,
+    zones: RIVERSIDE_ZONES,
+    zoneAirCurrentConfigs: generateZoneAirCurrentConfigs('region_riverside', RIVERSIDE_ZONES, 'coastal'),
+    refreshConfig: generateRefreshConfig('coastal'),
+    flightObjectiveModifiers: generateFlightObjectiveModifiers('coastal'),
   },
   {
     id: 'region_mountain_peak',
@@ -71,6 +269,10 @@ export const REGIONS: Region[] = [
     buildingDensity: 0.2,
     turbulenceLevel: 0.35,
     cloudCoverage: 0.6,
+    zones: MOUNTAIN_ZONES,
+    zoneAirCurrentConfigs: generateZoneAirCurrentConfigs('region_mountain_peak', MOUNTAIN_ZONES, 'mountain'),
+    refreshConfig: generateRefreshConfig('mountain'),
+    flightObjectiveModifiers: generateFlightObjectiveModifiers('mountain'),
   },
   {
     id: 'region_industrial',
@@ -95,6 +297,10 @@ export const REGIONS: Region[] = [
     buildingDensity: 0.45,
     turbulenceLevel: 0.3,
     cloudCoverage: 0.5,
+    zones: INDUSTRIAL_ZONES,
+    zoneAirCurrentConfigs: generateZoneAirCurrentConfigs('region_industrial', INDUSTRIAL_ZONES, 'industrial'),
+    refreshConfig: generateRefreshConfig('industrial'),
+    flightObjectiveModifiers: generateFlightObjectiveModifiers('industrial'),
   },
   {
     id: 'region_ancient_ruins',
@@ -119,6 +325,10 @@ export const REGIONS: Region[] = [
     buildingDensity: 0.3,
     turbulenceLevel: 0.25,
     cloudCoverage: 0.35,
+    zones: ANCIENT_ZONES,
+    zoneAirCurrentConfigs: generateZoneAirCurrentConfigs('region_ancient_ruins', ANCIENT_ZONES, 'ancient'),
+    refreshConfig: generateRefreshConfig('ancient'),
+    flightObjectiveModifiers: generateFlightObjectiveModifiers('ancient'),
   },
   {
     id: 'region_sky_island',
@@ -143,6 +353,10 @@ export const REGIONS: Region[] = [
     buildingDensity: 0.25,
     turbulenceLevel: 0.4,
     cloudCoverage: 0.7,
+    zones: SKY_ISLAND_ZONES,
+    zoneAirCurrentConfigs: generateZoneAirCurrentConfigs('region_sky_island', SKY_ISLAND_ZONES, 'sky_island'),
+    refreshConfig: generateRefreshConfig('sky_island'),
+    flightObjectiveModifiers: generateFlightObjectiveModifiers('sky_island'),
   },
 ];
 
@@ -766,6 +980,8 @@ export function createDefaultRegionProgress(region: Region): RegionProgress {
     stageProgress[id] = {};
   });
 
+  const zoneExplorationStates = createZoneExplorationStates(region.zones);
+
   const isInitial = region.unlockCost === 0;
 
   return {
@@ -781,6 +997,12 @@ export function createDefaultRegionProgress(region: Region): RegionProgress {
     totalScoreInRegion: 0,
     totalDistanceInRegion: 0,
     bestScoreInRegion: 0,
+    zoneExplorationStates,
+    currentBuildingSeed: Math.floor(Math.random() * 100000),
+    lastRefreshTime: null,
+    refreshCountThisSession: 0,
+    crossZoneFlightsCompleted: 0,
+    activeZoneId: null,
   };
 }
 
@@ -802,6 +1024,11 @@ export function createDefaultMapExploreState(): MapExploreState {
     if (firstStage) oldTownProgress.stageStatuses[firstStage] = 'active';
   }
 
+  let totalZonesExplored = 0;
+  REGIONS.forEach((region) => {
+    totalZonesExplored += region.zones.length;
+  });
+
   return {
     currentRegionId: null,
     regionProgress,
@@ -814,5 +1041,8 @@ export function createDefaultMapExploreState(): MapExploreState {
     activeStoryEventId: null,
     activeStoryDialogueIndex: 0,
     lastSettlementResults: [],
+    totalZonesExplored: 0,
+    totalCrossZoneFlights: 0,
+    lastRegionRefreshTriggers: {},
   };
 }

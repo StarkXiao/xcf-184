@@ -4,6 +4,11 @@ import type {
   StageSettlementResult,
   Stage,
   MapExploreFlightResult,
+  Region,
+  ZoneConfig,
+  RefreshTrigger,
+  ZoneExplorationState,
+  SpecialAirCurrentZoneConfig,
 } from './types';
 import {
   REGIONS,
@@ -13,15 +18,46 @@ import {
   STAGES,
   createDefaultMapExploreState,
 } from './mapExploreData';
-import type { GameStats } from '../game/types';
+import type { GameStats, ZoneBuildConfig, ZoneAirCurrentConfig, GameConfig } from '../game/types';
 
 const SAVE_KEY = 'kite_map_explore_save';
 
 export class MapExploreEngine {
   private state: MapExploreState;
+  private runtimeStates: Map<string, {
+    flightEnteredZones: Set<string>;
+    zoneCrossings: number;
+    lastZoneId: string | null;
+  }> = new Map();
 
   constructor() {
     this.state = createDefaultMapExploreState();
+  }
+
+  private seededRandom(seed: number): () => number {
+    let s = seed;
+    return () => {
+      s = (s * 9301 + 49297) % 233280;
+      return s / 233280;
+    };
+  }
+
+  private getRuntimeState(regionId: string) {
+    if (!this.runtimeStates.has(regionId)) {
+      this.runtimeStates.set(regionId, {
+        flightEnteredZones: new Set(),
+        zoneCrossings: 0,
+        lastZoneId: null,
+      });
+    }
+    return this.runtimeStates.get(regionId)!;
+  }
+
+  public resetFlightRuntime(regionId: string): void {
+    const runtime = this.getRuntimeState(regionId);
+    runtime.flightEnteredZones.clear();
+    runtime.zoneCrossings = 0;
+    runtime.lastZoneId = null;
   }
 
   public getState(): MapExploreState {
@@ -314,16 +350,30 @@ export class MapExploreEngine {
 
   public recordFlightInRegion(regionId: string, stats: GameStats, adjustedScore: number): MapExploreFlightResult {
     const regionProgress = this.state.regionProgress[regionId];
-    if (!regionProgress || regionProgress.status !== 'unlocked') {
+    const region = this.getRegion(regionId);
+    if (!regionProgress || regionProgress.status !== 'unlocked' || !region) {
       return this.createEmptyFlightResult(regionId);
     }
 
-    regionProgress.totalFlightsInRegion += 1;
-    regionProgress.totalScoreInRegion += adjustedScore;
-    regionProgress.totalDistanceInRegion += stats.distance;
+    const modifiers = region.flightObjectiveModifiers || {};
+    const effectiveDistance = stats.distance * (modifiers.distanceMultiplier || 1.0);
+    const effectiveScore = adjustedScore * (modifiers.scoreMultiplier || 1.0);
+    const effectiveMaxHeight = stats.maxHeight * (modifiers.heightMultiplier || 1.0);
+    const effectiveAirCurrentCount = stats.airCurrentCount + (modifiers.airCurrentBonus || 0);
 
-    if (adjustedScore > regionProgress.bestScoreInRegion) {
-      regionProgress.bestScoreInRegion = adjustedScore;
+    const modifiedStats: GameStats = {
+      ...stats,
+      distance: effectiveDistance,
+      maxHeight: effectiveMaxHeight,
+      airCurrentCount: Math.max(0, Math.floor(effectiveAirCurrentCount)),
+    };
+
+    regionProgress.totalFlightsInRegion += 1;
+    regionProgress.totalScoreInRegion += effectiveScore;
+    regionProgress.totalDistanceInRegion += effectiveDistance;
+
+    if (effectiveScore > regionProgress.bestScoreInRegion) {
+      regionProgress.bestScoreInRegion = effectiveScore;
     }
 
     const result: MapExploreFlightResult = {
@@ -333,23 +383,58 @@ export class MapExploreEngine {
       newlyCapturedAirCurrents: [],
       newlyCompletedStages: [],
       newlyCompletedStoryEvents: [],
+      newlyExploredZones: [],
+      crossZoneFlightsThisFlight: 0,
+      regionRefreshed: false,
+      refreshTrigger: null,
       totalRewardCoins: 0,
       totalRewardScore: 0,
     };
 
-    this.checkBuildingClusterExploration(regionId, stats, adjustedScore, result);
-    this.checkRareAirCurrentDiscovery(regionId, stats, adjustedScore, result);
-    this.checkRareAirCurrentCapture(regionId, stats, adjustedScore, result);
-    this.updateStageProgress(regionId, stats, adjustedScore);
+    const runtime = this.getRuntimeState(regionId);
+    result.crossZoneFlightsThisFlight = runtime.zoneCrossings;
+    if (runtime.zoneCrossings >= 2) {
+      regionProgress.crossZoneFlightsCompleted += 1;
+      this.state.totalCrossZoneFlights += 1;
+    }
+
+    this.checkZoneExplorationRewards(regionId, result);
+
+    this.checkBuildingClusterExploration(regionId, modifiedStats, effectiveScore, result);
+    this.checkRareAirCurrentDiscovery(regionId, modifiedStats, effectiveScore, result);
+    this.checkRareAirCurrentCapture(regionId, modifiedStats, effectiveScore, result);
+    this.updateStageProgress(regionId, modifiedStats, effectiveScore);
     this.checkStageCompletion(regionId, result);
+
+    const exploredClusters = result.newlyExploredBuildingClusters.length > 0;
+    const completedStages = result.newlyCompletedStages.length > 0;
+    if (exploredClusters) {
+      if (this.tryRefreshRegion(regionId, 'building_explored')) {
+        result.regionRefreshed = true;
+        result.refreshTrigger = 'building_explored';
+      }
+    }
+    if (completedStages && !result.regionRefreshed) {
+      if (this.tryRefreshRegion(regionId, 'stage_complete')) {
+        result.regionRefreshed = true;
+        result.refreshTrigger = 'stage_complete';
+      }
+    }
+    if (!result.regionRefreshed) {
+      if (this.tryRefreshRegion(regionId, 'flight_complete')) {
+        result.regionRefreshed = true;
+        result.refreshTrigger = 'flight_complete';
+      }
+    }
 
     regionProgress.totalScoreInRegion += result.totalRewardScore;
 
-    const flightTotalScore = adjustedScore + result.totalRewardScore;
+    const flightTotalScore = effectiveScore + result.totalRewardScore;
     if (flightTotalScore > regionProgress.bestScoreInRegion) {
       regionProgress.bestScoreInRegion = flightTotalScore;
     }
 
+    this.resetFlightRuntime(regionId);
     this.recalculateExploration();
     this.saveToLocalStorage();
 
@@ -364,9 +449,65 @@ export class MapExploreEngine {
       newlyCapturedAirCurrents: [],
       newlyCompletedStages: [],
       newlyCompletedStoryEvents: [],
+      newlyExploredZones: [],
+      crossZoneFlightsThisFlight: 0,
+      regionRefreshed: false,
+      refreshTrigger: null,
       totalRewardCoins: 0,
       totalRewardScore: 0,
     };
+  }
+
+  private checkZoneExplorationRewards(
+    regionId: string,
+    result: MapExploreFlightResult,
+  ): void {
+    const regionProgress = this.state.regionProgress[regionId];
+    const region = this.getRegion(regionId);
+    if (!regionProgress || !region) return;
+
+    const runtime = this.getRuntimeState(regionId);
+
+    runtime.flightEnteredZones.forEach((zoneId) => {
+      const zoneState = regionProgress!.zoneExplorationStates[zoneId];
+      const zone = region!.zones.find((z) => z.id === zoneId);
+      if (!zoneState || !zone) return;
+
+      const prevPercent = zoneState.explorationPercent;
+
+      const buildingExplorationBonus = runtime.flightEnteredZones.size >= 3 ? 50 : 0;
+
+      zoneState.exploredBuildingsCount = Math.min(
+        zoneState.totalBuildingsInZone,
+        zoneState.exploredBuildingsCount + Math.floor(zoneState.totalBuildingsInZone * 0.1)
+      );
+      zoneState.explorationPercent = Math.min(
+        100,
+        Math.floor((zoneState.exploredBuildingsCount / Math.max(1, zoneState.totalBuildingsInZone)) * 100)
+      );
+
+      const isNewlyExplored = zoneState.explorationPercent >= 80 && prevPercent < 80;
+
+      if (isNewlyExplored || runtime.flightEnteredZones.has(zoneId)) {
+        const baseReward = isNewlyExplored
+          ? Math.floor(20 + zone.baseBuildingDensity * 100)
+          : 0;
+        const reward = baseReward + buildingExplorationBonus;
+
+        if (reward > 0 || isNewlyExplored) {
+          result.newlyExploredZones.push({
+            zoneId,
+            zoneName: zone.name,
+            explorationPercent: zoneState.explorationPercent,
+            rewardCoins: reward,
+          });
+          result.totalRewardCoins += reward;
+          if (isNewlyExplored) {
+            this.state.totalZonesExplored += 1;
+          }
+        }
+      }
+    });
   }
 
   private checkBuildingClusterExploration(
@@ -606,7 +747,16 @@ export class MapExploreEngine {
             value = completedStories;
             break;
           }
-        }
+          case 'zone_exploration': {
+            const exploredZones = Object.values(regionProgress.zoneExplorationStates)
+              .filter((z) => z.explorationPercent >= 80).length;
+            value = exploredZones;
+            break;
+          }
+          case 'cross_zone_flight': {
+            value = regionProgress.crossZoneFlightsCompleted;
+            break;
+          }
 
         progress[obj.type] = Math.max(progress[obj.type] || 0, value);
       });
@@ -772,10 +922,183 @@ export class MapExploreEngine {
 
   public setCurrentRegion(regionId: string | null): void {
     this.state.currentRegionId = regionId;
+    if (regionId) {
+      this.resetFlightRuntime(regionId);
+      const progress = this.state.regionProgress[regionId];
+      if (progress) {
+        progress.activeZoneId = null;
+        const region = this.getRegion(regionId);
+        if (region && region.refreshConfig.triggers.includes('region_enter')) {
+          this.tryRefreshRegion(regionId, 'region_enter');
+        }
+      }
+    }
+  }
+
+  public tryRefreshRegion(regionId: string, trigger: RefreshTrigger): boolean {
+    const region = this.getRegion(regionId);
+    const progress = this.state.regionProgress[regionId];
+    if (!region || !progress) return false;
+
+    const config = region.refreshConfig;
+    if (!config.enabled) return false;
+    if (!config.triggers.includes(trigger)) return false;
+    if (progress.refreshCountThisSession >= config.maxRefreshesPerSession) return false;
+
+    const now = Date.now();
+    progress.currentBuildingSeed = Math.floor(Math.random() * 1000000);
+    progress.lastRefreshTime = now;
+    progress.refreshCountThisSession += 1;
+    this.state.lastRegionRefreshTriggers[regionId] = trigger;
+
+    if (config.preserveExploredBuildings) {
+      // preserve logic handled by SceneManager via buildingIds
+    }
+
+    this.recalculateExploration();
+    this.saveToLocalStorage();
+    return true;
+  }
+
+  public getZoneAtPosition(regionId: string, x: number, z: number): ZoneConfig | null {
+    const region = this.getRegion(regionId);
+    if (!region) return null;
+
+    for (const zone of region.zones) {
+      const bbox = zone.boundingBox;
+      if (x >= bbox.minX && x <= bbox.maxX && z >= bbox.minZ && z <= bbox.maxZ) {
+        return zone;
+      }
+    }
+    return null;
+  }
+
+  public updatePlayerZone(regionId: string, x: number, z: number): {
+    enteredNewZone: boolean;
+    zoneId: string | null;
+    zoneName: string | null;
+    crossZoneCount: number;
+  } {
+    const region = this.getRegion(regionId);
+    const progress = this.state.regionProgress[regionId];
+    if (!region || !progress) {
+      return { enteredNewZone: false, zoneId: null, zoneName: null, crossZoneCount: 0 };
+    }
+
+    const runtime = this.getRuntimeState(regionId);
+    const zone = this.getZoneAtPosition(regionId, x, z);
+    const zoneId = zone?.id || null;
+
+    let enteredNewZone = false;
+    let crossZoneCount = runtime.zoneCrossings;
+
+    if (zoneId && runtime.lastZoneId !== zoneId) {
+      if (runtime.lastZoneId !== null) {
+        runtime.zoneCrossings += 1;
+        crossZoneCount = runtime.zoneCrossings;
+      }
+      runtime.lastZoneId = zoneId;
+      progress.activeZoneId = zoneId;
+
+      if (!runtime.flightEnteredZones.has(zoneId)) {
+        enteredNewZone = true;
+        runtime.flightEnteredZones.add(zoneId);
+
+        const zoneState = progress.zoneExplorationStates[zoneId];
+        if (zoneState) {
+          zoneState.entered = true;
+          zoneState.flightsEntered += 1;
+          if (!zoneState.firstEnteredAt) {
+            zoneState.firstEnteredAt = Date.now();
+          }
+          zoneState.lastVisitedAt = Date.now();
+        }
+
+        if (region.refreshConfig.airCurrentRefreshOnZoneEntry) {
+          // air current refresh handled by AirCurrentSystem
+        }
+      }
+    }
+
+    return {
+      enteredNewZone,
+      zoneId,
+      zoneName: zone?.name || null,
+      crossZoneCount,
+    };
+  }
+
+  public generateZoneBuildConfigs(regionId: string): ZoneBuildConfig[] | null {
+    const region = this.getRegion(regionId);
+    const progress = this.state.regionProgress[regionId];
+    if (!region || !progress) return null;
+
+    const random = this.seededRandom(progress.currentBuildingSeed);
+    const configs: ZoneBuildConfig[] = [];
+
+    const styleColors: Record<string, number[]> = {
+      modern: [0x708090, 0x4682b4, 0x696969, 0x778899, 0x5f9ea0],
+      traditional: [0x8b4513, 0xa0522d, 0xd2b48c, 0xcd853f, 0xdeb887],
+      industrial: [0x4a4a4a, 0x696969, 0x556b2f, 0x708090, 0x808080],
+      ancient: [0x92400e, 0x8b7355, 0xb8860b, 0xd4a574, 0xfbbf24],
+      futuristic: [0x7c3aed, 0x6366f1, 0x0ea5e9, 0x06b6d4, 0xc4b5fd],
+      mixed: [0x8b4513, 0x708090, 0x696969, 0xd2b48c, 0x4682b4],
+    };
+
+    region.zones.forEach((zone) => {
+      const variance = region.refreshConfig.buildingDensityVariance;
+      const adjustedDensity = Math.max(
+        0.05,
+        Math.min(0.9, zone.baseBuildingDensity + (random() - 0.5) * variance * 2)
+      );
+
+      configs.push({
+        zoneId: zone.id,
+        boundingBox: zone.boundingBox,
+        buildingDensity: adjustedDensity,
+        minBuildingHeight: zone.minBuildingHeight,
+        maxBuildingHeight: zone.maxBuildingHeight,
+        buildingStyle: zone.buildingStyle,
+        colorPalette: styleColors[zone.buildingStyle] || styleColors.mixed,
+        specialEffect: zone.specialEffect,
+      });
+    });
+
+    return configs;
+  }
+
+  public generateZoneAirCurrentConfigs(regionId: string): ZoneAirCurrentConfig[] | null {
+    const region = this.getRegion(regionId);
+    if (!region) return null;
+
+    const configs: ZoneAirCurrentConfig[] = [];
+
+    region.zoneAirCurrentConfigs.forEach((zac) => {
+      const zone = region.zones.find((z) => z.id === zac.zoneId);
+      const permanentPositions = zac.permanentCurrentPositions?.map((p) => ({
+        position: { x: p.position.x, y: p.height || 50, z: p.position.y },
+        type: p.type,
+        strength: p.strength,
+        radius: 30 * zac.radiusMultiplier,
+      }));
+
+      configs.push({
+        zoneId: zac.zoneId,
+        baseSpawnRate: zac.baseSpawnRate,
+        preferredTypes: [...zac.preferredTypes],
+        minStrength: zac.minStrength,
+        maxStrength: zac.maxStrength,
+        radiusMultiplier: zac.radiusMultiplier,
+        permanentCurrentPositions: permanentPositions,
+      });
+    });
+
+    return configs;
   }
 
   public getGameConfigOverride(regionId: string) {
     const region = this.getRegion(regionId);
+    const progress = this.state.regionProgress[regionId];
     if (!region) return null;
 
     return {
@@ -787,6 +1110,11 @@ export class MapExploreEngine {
       buildingDensity: region.buildingDensity,
       turbulenceLevel: region.turbulenceLevel,
       cloudCoverage: region.cloudCoverage,
+      regionId: region.id,
+      buildingSeed: progress?.currentBuildingSeed ?? Date.now(),
+      zoneConfigs: this.generateZoneBuildConfigs(regionId) || undefined,
+      zoneAirCurrentConfigs: this.generateZoneAirCurrentConfigs(regionId) || undefined,
+      flightObjectiveModifiers: region.flightObjectiveModifiers,
     };
   }
 
@@ -817,8 +1145,13 @@ export class MapExploreEngine {
         (id) => progress?.stageStatuses[id] === 'claimed'
       ).length;
 
-      const regionTotal = bcTotal + racTotal + seTotal + stTotal;
-      const regionCompleted = bcCompleted + racCaptured + seCompleted + stClaimed;
+      const zoneTotal = region.zones.length;
+      const zoneExplored = region.zones.filter(
+        (z) => progress?.zoneExplorationStates[z.id]?.explorationPercent >= 80
+      ).length;
+
+      const regionTotal = bcTotal + racTotal + seTotal + stTotal + zoneTotal;
+      const regionCompleted = bcCompleted + racCaptured + seCompleted + stClaimed + zoneExplored;
 
       totalItems += regionTotal;
       completedItems += regionCompleted;
@@ -837,6 +1170,7 @@ export class MapExploreEngine {
 
   public getRegionConfigForFlight(regionId: string) {
     const region = this.getRegion(regionId);
+    const progress = this.state.regionProgress[regionId];
     if (!region) return null;
 
     return {
@@ -850,6 +1184,10 @@ export class MapExploreEngine {
       buildingDensity: region.buildingDensity,
       turbulenceLevel: region.turbulenceLevel,
       cloudCoverage: region.cloudCoverage,
+      buildingSeed: progress?.currentBuildingSeed ?? Date.now(),
+      zoneConfigs: this.generateZoneBuildConfigs(regionId) || undefined,
+      zoneAirCurrentConfigs: this.generateZoneAirCurrentConfigs(regionId) || undefined,
+      flightObjectiveModifiers: region.flightObjectiveModifiers,
     };
   }
 
@@ -877,9 +1215,28 @@ export class MapExploreEngine {
         const defaultState = createDefaultMapExploreState();
         REGIONS.forEach((region) => {
           if (data.regionProgress[region.id]) {
+            const savedProgress = data.regionProgress[region.id];
+            const defaultProgress = defaultState.regionProgress[region.id];
+
+            const zoneExplorationStates = savedProgress.zoneExplorationStates
+              ? { ...defaultProgress.zoneExplorationStates, ...savedProgress.zoneExplorationStates }
+              : defaultProgress.zoneExplorationStates;
+
+            Object.keys(defaultProgress.zoneExplorationStates).forEach((zoneId) => {
+              if (!zoneExplorationStates[zoneId]) {
+                zoneExplorationStates[zoneId] = defaultProgress.zoneExplorationStates[zoneId];
+              }
+            });
+
             this.state.regionProgress[region.id] = {
-              ...defaultState.regionProgress[region.id],
-              ...data.regionProgress[region.id],
+              ...defaultProgress,
+              ...savedProgress,
+              zoneExplorationStates,
+              currentBuildingSeed: savedProgress.currentBuildingSeed ?? defaultProgress.currentBuildingSeed,
+              lastRefreshTime: savedProgress.lastRefreshTime ?? null,
+              refreshCountThisSession: savedProgress.refreshCountThisSession ?? 0,
+              crossZoneFlightsCompleted: savedProgress.crossZoneFlightsCompleted ?? 0,
+              activeZoneId: savedProgress.activeZoneId ?? null,
             };
           }
         });
@@ -914,6 +1271,15 @@ export class MapExploreEngine {
       }
       if (data.lastSettlementResults) {
         this.state.lastSettlementResults = data.lastSettlementResults;
+      }
+      if (data.totalZonesExplored !== undefined) {
+        this.state.totalZonesExplored = data.totalZonesExplored;
+      }
+      if (data.totalCrossZoneFlights !== undefined) {
+        this.state.totalCrossZoneFlights = data.totalCrossZoneFlights;
+      }
+      if (data.lastRegionRefreshTriggers) {
+        this.state.lastRegionRefreshTriggers = data.lastRegionRefreshTriggers;
       }
 
       this.recalculateExploration();

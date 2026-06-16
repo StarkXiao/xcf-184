@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AirCurrent, GameConfig, Vector3, ShadowTrailPoint } from './types';
+import type { AirCurrent, GameConfig, Vector3, ShadowTrailPoint, ZoneAirCurrentConfig } from './types';
 
 export class AirCurrentSystem {
   public airCurrents: AirCurrent[] = [];
@@ -7,14 +7,89 @@ export class AirCurrentSystem {
   private config: GameConfig;
   private visualMeshes: Map<string, THREE.Group> = new Map();
   private shadowTrail: ShadowTrailPoint[] = [];
+  private zoneConfigs: ZoneAirCurrentConfig[] = [];
+  private permanentCurrentsPlaced: boolean = false;
 
   constructor(scene: THREE.Scene, config: GameConfig) {
     this.scene = scene;
     this.config = config;
+    this.zoneConfigs = config.zoneAirCurrentConfigs ?? [];
   }
 
   public updateShadowTrail(trail: ShadowTrailPoint[]): void {
     this.shadowTrail = trail.slice();
+  }
+
+  private getZoneConfigForPosition(x: number, z: number): ZoneAirCurrentConfig | null {
+    for (const zone of this.zoneConfigs) {
+      // Check position approximately by zoneId hash if no bounding box
+      if (this.zoneConfigs.length > 0) {
+        // If zone has permanent positions, use zone directly
+        if (zone.permanentCurrentPositions && zone.permanentCurrentPositions.length > 0) {
+          return zone;
+        }
+        // Approximate zone mapping: distribute zones across world
+        const zoneIndex = this.zoneConfigs.indexOf(zone);
+        const divisions = Math.ceil(Math.sqrt(this.zoneConfigs.length));
+        const half = this.config.worldSize / 2;
+        const divisionSize = this.config.worldSize / divisions;
+        const gx = Math.floor((x + half) / divisionSize);
+        const gz = Math.floor((z + half) / divisionSize);
+        const idx = gx + gz * divisions;
+        if (idx === zoneIndex || idx % this.zoneConfigs.length === zoneIndex) {
+          return zone;
+        }
+      }
+    }
+    return this.zoneConfigs.length > 0 ? this.zoneConfigs[0] : null;
+  }
+
+  public placePermanentAirCurrents(): void {
+    if (this.permanentCurrentsPlaced) return;
+
+    this.zoneConfigs.forEach((zone) => {
+      if (zone.permanentCurrentPositions) {
+        zone.permanentCurrentPositions.forEach((pos, idx) => {
+          const id = `perm-${zone.zoneId}-${idx}`;
+          const existing = this.airCurrents.find((a) => a.id === id);
+          if (existing) return;
+
+          let direction: Vector3;
+          switch (pos.type) {
+            case 'updraft':
+              direction = { x: 0, y: pos.strength, z: 0 };
+              break;
+            case 'downdraft':
+              direction = { x: 0, y: -pos.strength * 0.6, z: 0 };
+              break;
+            case 'turbulence':
+            default:
+              direction = {
+                x: (Math.random() - 0.5) * pos.strength,
+                y: (Math.random() - 0.5) * pos.strength * 0.5,
+                z: (Math.random() - 0.5) * pos.strength,
+              };
+              break;
+          }
+
+          const airCurrent: AirCurrent = {
+            id,
+            position: pos.position,
+            radius: pos.radius,
+            strength: pos.strength,
+            direction,
+            type: pos.type,
+            lifeTime: -1,
+            maxLifeTime: -1,
+            shadowBrightness: 0.8,
+          };
+
+          this.addPermanentAirCurrent(airCurrent);
+        });
+      }
+    });
+
+    this.permanentCurrentsPlaced = true;
   }
 
   public spawnAirCurrent(
@@ -161,9 +236,16 @@ export class AirCurrentSystem {
   ): Vector3 {
     const totalForce: Vector3 = { x: 0, y: 0, z: 0 };
 
-    const spawnRate = this.config.airCurrentSpawnRate * (0.8 + shadowBrightness * 0.8);
+    if (!this.permanentCurrentsPlaced && this.zoneConfigs.length > 0) {
+      this.placePermanentAirCurrents();
+    }
 
-    if (Math.random() < spawnRate) {
+    const zoneConfig = this.getZoneConfigForPosition(kitePosition.x, kitePosition.z);
+    const effectiveSpawnRate = zoneConfig
+      ? zoneConfig.baseSpawnRate * (0.8 + shadowBrightness * 0.8)
+      : this.config.airCurrentSpawnRate * (0.8 + shadowBrightness * 0.8);
+
+    if (Math.random() < effectiveSpawnRate) {
       let spawnPosition: Vector3;
       let effectiveBrightness = shadowBrightness;
 
@@ -205,24 +287,53 @@ export class AirCurrentSystem {
         };
       }
 
-      const types: Array<'updraft' | 'downdraft' | 'turbulence'> = [
-        'updraft',
-        'updraft',
-        'turbulence',
-        'downdraft',
-      ];
-      const brightTypes: Array<'updraft' | 'downdraft' | 'turbulence'> = [
-        'updraft',
-        'updraft',
-        'updraft',
-        'turbulence',
-      ];
-      const useBright = effectiveBrightness > 0.6;
-      const type = (useBright ? brightTypes : types)[
-        Math.floor(Math.random() * (useBright ? brightTypes.length : types.length))
-      ];
+      const spawnZoneConfig = this.getZoneConfigForPosition(spawnPosition.x, spawnPosition.z);
 
-      this.spawnAirCurrent(spawnPosition, type, undefined, effectiveBrightness);
+      let types: Array<'updraft' | 'downdraft' | 'turbulence'>;
+      let minStrength: number;
+      let maxStrength: number;
+      let radiusMultiplier: number;
+
+      if (spawnZoneConfig) {
+        types = spawnZoneConfig.preferredTypes;
+        minStrength = spawnZoneConfig.minStrength;
+        maxStrength = spawnZoneConfig.maxStrength;
+        radiusMultiplier = spawnZoneConfig.radiusMultiplier;
+      } else {
+        types = ['updraft', 'updraft', 'turbulence', 'downdraft'];
+        minStrength = this.config.minAirCurrentStrength;
+        maxStrength = this.config.maxAirCurrentStrength;
+        radiusMultiplier = 1.0;
+      }
+
+      const brightTypes: Array<'updraft' | 'downdraft' | 'turbulence'> =
+        spawnZoneConfig?.preferredTypes.filter((t) => t === 'updraft').length >= 2
+          ? spawnZoneConfig.preferredTypes
+          : ['updraft', 'updraft', 'updraft', 'turbulence'];
+
+      const useBright = effectiveBrightness > 0.6;
+      const typePool = useBright ? brightTypes : types;
+      const type = typePool[Math.floor(Math.random() * typePool.length)];
+
+      const strengthRange = maxStrength - minStrength;
+      const baseStrength = minStrength + Math.random() * strengthRange;
+      const adjustedStrength = baseStrength * (0.8 + effectiveBrightness * 0.6);
+
+      this.spawnAirCurrent(
+        spawnPosition,
+        type,
+        adjustedStrength,
+        effectiveBrightness
+      );
+
+      if (radiusMultiplier !== 1.0 && this.airCurrents.length > 0) {
+        const lastCurrent = this.airCurrents[this.airCurrents.length - 1];
+        lastCurrent.radius *= radiusMultiplier;
+        const mesh = this.visualMeshes.get(lastCurrent.id);
+        if (mesh) {
+          mesh.scale.setScalar(radiusMultiplier);
+        }
+      }
     }
 
     for (let i = this.airCurrents.length - 1; i >= 0; i--) {
@@ -327,6 +438,7 @@ export class AirCurrentSystem {
     });
     this.airCurrents = [];
     this.visualMeshes.clear();
+    this.permanentCurrentsPlaced = false;
   }
 
   public reconfigure(config: Partial<GameConfig>): void {
@@ -338,6 +450,12 @@ export class AirCurrentSystem {
     }
     if (config.maxAirCurrentStrength !== undefined) {
       this.config.maxAirCurrentStrength = config.maxAirCurrentStrength;
+    }
+    if (config.zoneAirCurrentConfigs !== undefined) {
+      this.zoneConfigs = config.zoneAirCurrentConfigs;
+    }
+    if (config.worldSize !== undefined) {
+      this.config.worldSize = config.worldSize;
     }
     this.clear();
   }
