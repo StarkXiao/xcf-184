@@ -1406,3 +1406,187 @@
     flex-wrap: wrap;
   }
 }
+
+.settlement-obstacles {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 16px;
+}
+
+.settlement-obstacles h4 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+}
+
+.obstacle-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.obstacle-stat-card {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px 6px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.obstacle-stat-card:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+.obstacle-stat-card.success {
+  border-color: rgba(0, 255, 136, 0.3);
+  background: rgba(0, 255, 136, 0.1);
+}
+
+.obstacle-stat-card.danger {
+  border-color: rgba(255, 68, 68, 0.3);
+  background: rgba(255, 68, 68, 0.1);
+}
+
+.obstacle-stat-card.warning {
+  border-color: rgba(255, 215, 0, 0.3);
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.obstacle-stat-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.obstacle-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  font-family: monospace;
+  line-height: 1.2;
+}
+
+.obstacle-stat-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 2px;
+}
+
+.obstacle-avoidance-rate {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.avoidance-rate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+}
+
+.avoidance-rate-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.avoidance-rate-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.obstacle-breakdown {
+  margin-bottom: 12px;
+}
+
+.obstacle-breakdown-title {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.obstacle-breakdown-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.obstacle-breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.obstacle-icon {
+  font-size: 14px;
+}
+
+.obstacle-name {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.obstacle-count {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.obstacle-count.danger {
+  color: #ff6b6b;
+}
+
+.obstacle-extra-stats {
+  display: flex;
+  justify-content: space-around;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.extra-stat-item {
+  text-align: center;
+}
+
+.extra-stat-label {
+  display: block;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 2px;
+}
+
+.extra-stat-value {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  font-family: monospace;
+}
+
+@media (max-width: 600px) {
+  .obstacle-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .obstacle-breakdown-list {
+    grid-template-columns: 1fr;
+  }
+}

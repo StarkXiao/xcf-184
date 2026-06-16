@@ -18,8 +18,6 @@ import type {
   DurabilityConfig,
   TensionConfig,
   ObstacleConfig,
-  ObstacleStats,
-  ObstacleWarning,
 } from './types';
 import {
   DEFAULT_OBSTACLE_CONFIG,

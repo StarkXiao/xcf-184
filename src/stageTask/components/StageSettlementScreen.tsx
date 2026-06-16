@@ -1,5 +1,5 @@
 import React from 'react';
-import type { StageSettlement, StageTask } from '../types';
+import type { StageSettlement, StageTask, ObstacleSettlement } from '../types';
 
 interface StageSettlementScreenProps {
   settlement: StageSettlement;
@@ -22,6 +22,20 @@ export const StageSettlementScreen: React.FC<StageSettlementScreenProps> = ({
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getAvoidanceRateColor = (rate: number): string => {
+    if (rate >= 0.9) return '#00ff88';
+    if (rate >= 0.7) return '#ffd700';
+    if (rate >= 0.5) return '#ff8c00';
+    return '#ff4444';
+  };
+
+  const getAvoidanceRateGradient = (rate: number): string => {
+    if (rate >= 0.9) return 'linear-gradient(90deg, #00ff88, #00b85c)';
+    if (rate >= 0.7) return 'linear-gradient(90deg, #ffd700, #ffaa00)';
+    if (rate >= 0.5) return 'linear-gradient(90deg, #ff8c00, #ff6600)';
+    return 'linear-gradient(90deg, #ff4444, #cc0000)';
   };
 
   const getStarsDisplay = (stars: number): string[] => {
@@ -83,6 +97,102 @@ export const StageSettlementScreen: React.FC<StageSettlementScreenProps> = ({
             <span className="reward-text">用时 {formatTime(settlement.timeUsed)}</span>
           </div>
         </div>
+
+        {(() => {
+          const obstacleStats: ObstacleSettlement | undefined = settlement.obstacleStats;
+          if (!obstacleStats || obstacleStats.totalSpawned <= 0) return null;
+          
+          return (
+            <div className="settlement-obstacles">
+              <h4>🚁 空中目标统计</h4>
+              <div className="obstacle-stats-grid">
+                <div className="obstacle-stat-card">
+                  <div className="obstacle-stat-icon">🚁</div>
+                  <div className="obstacle-stat-value">{obstacleStats.totalSpawned}</div>
+                  <div className="obstacle-stat-label">总目标数</div>
+                </div>
+                <div className="obstacle-stat-card success">
+                  <div className="obstacle-stat-icon">✅</div>
+                  <div className="obstacle-stat-value">{obstacleStats.totalAvoided}</div>
+                  <div className="obstacle-stat-label">成功躲避</div>
+                </div>
+                <div className="obstacle-stat-card danger">
+                  <div className="obstacle-stat-icon">💥</div>
+                  <div className="obstacle-stat-value">{obstacleStats.totalCollided}</div>
+                  <div className="obstacle-stat-label">发生碰撞</div>
+                </div>
+                <div className="obstacle-stat-card warning">
+                  <div className="obstacle-stat-icon">😅</div>
+                  <div className="obstacle-stat-value">{obstacleStats.nearMissCount}</div>
+                  <div className="obstacle-stat-label">险兆</div>
+                </div>
+              </div>
+
+              <div className="obstacle-avoidance-rate">
+                <div className="avoidance-rate-header">
+                  <span>躲避率</span>
+                  <span style={{ color: getAvoidanceRateColor(obstacleStats.avoidanceRate) }}>
+                    {(obstacleStats.avoidanceRate * 100).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="avoidance-rate-bar">
+                  <div
+                    className="avoidance-rate-fill"
+                    style={{
+                      width: `${obstacleStats.avoidanceRate * 100}%`,
+                      background: getAvoidanceRateGradient(obstacleStats.avoidanceRate),
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="obstacle-breakdown">
+                <div className="obstacle-breakdown-title">各类型碰撞统计</div>
+                <div className="obstacle-breakdown-list">
+                  <div className="obstacle-breakdown-item">
+                    <span className="obstacle-icon">🚁</span>
+                    <span className="obstacle-name">无人机</span>
+                    <span className={`obstacle-count ${obstacleStats.droneCollided > 0 ? 'danger' : ''}`}>
+                      {obstacleStats.droneCollided} 次
+                    </span>
+                  </div>
+                  <div className="obstacle-breakdown-item">
+                    <span className="obstacle-icon">🎈</span>
+                    <span className="obstacle-name">广告气球</span>
+                    <span className={`obstacle-count ${obstacleStats.adBalloonCollided > 0 ? 'danger' : ''}`}>
+                      {obstacleStats.adBalloonCollided} 次
+                    </span>
+                  </div>
+                  <div className="obstacle-breakdown-item">
+                    <span className="obstacle-icon">🐦</span>
+                    <span className="obstacle-name">飞鸟</span>
+                    <span className={`obstacle-count ${obstacleStats.birdCollided > 0 ? 'danger' : ''}`}>
+                      {obstacleStats.birdCollided} 次
+                    </span>
+                  </div>
+                  <div className="obstacle-breakdown-item">
+                    <span className="obstacle-icon">✈️</span>
+                    <span className="obstacle-name">飞机</span>
+                    <span className={`obstacle-count ${obstacleStats.airplaneCollided > 0 ? 'danger' : ''}`}>
+                      {obstacleStats.airplaneCollided} 次
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="obstacle-extra-stats">
+                <div className="extra-stat-item">
+                  <span className="extra-stat-label">预警次数</span>
+                  <span className="extra-stat-value">{obstacleStats.warningsIssued}</span>
+                </div>
+                <div className="extra-stat-item">
+                  <span className="extra-stat-label">同屏最多</span>
+                  <span className="extra-stat-value">{obstacleStats.maxObstaclesOnScreen}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="settlement-tasks">
           <h4>任务完成情况</h4>

@@ -212,7 +212,7 @@ export class ObstacleSystem {
   }
 
   private calculateInitialVelocity(
-    type: ObstacleType,
+    _type: ObstacleType,
     position: Vector3,
     targetPos: THREE.Vector3,
     speed: number

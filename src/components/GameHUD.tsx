@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import type { GameStats, WeatherEventType, TimeOfDayPhase } from '../game/types';
+import type { GameStats, WeatherEventType, TimeOfDayPhase, ObstacleWarning, ObstacleType } from '../game/types';
 
 interface GameHUDProps {
   stats: GameStats;
@@ -37,6 +37,34 @@ const WEATHER_EVENT_COLORS: Record<WeatherEventType, string> = {
   denseFog: 'linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%)',
   sunBreak: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
   thunderStorm: 'linear-gradient(135deg, #434343 0%, #000000 100%)',
+};
+
+const OBSTACLE_TYPE_ICONS: Record<ObstacleType, string> = {
+  drone: '🚁',
+  adBalloon: '🎈',
+  bird: '🐦',
+  airplane: '✈️',
+};
+
+const WARNING_SEVERITY_COLORS: Record<ObstacleWarning['severity'], string> = {
+  low: '#4ecdc4',
+  medium: '#ffd700',
+  high: '#ff8c00',
+  critical: '#ff0000',
+};
+
+const WARNING_SEVERITY_NAMES: Record<ObstacleWarning['severity'], string> = {
+  low: '注意',
+  medium: '警告',
+  high: '危险',
+  critical: '紧急',
+};
+
+const WARNING_SEVERITY_PULSE: Record<ObstacleWarning['severity'], boolean> = {
+  low: false,
+  medium: false,
+  high: true,
+  critical: true,
 };
 
 const TIME_OF_DAY_NAMES: Record<TimeOfDayPhase, string> = {
@@ -365,6 +393,65 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
         </div>
       )}
 
+      {stats.activeWarnings && stats.activeWarnings.length > 0 && (
+        <div className="obstacle-warning-indicators">
+          {stats.activeWarnings.slice(0, 6).map((warning) => {
+            const angle = Math.atan2(warning.direction.z, warning.direction.x) * (180 / Math.PI) - 90;
+            const severityColor = WARNING_SEVERITY_COLORS[warning.severity];
+            const shouldPulse = WARNING_SEVERITY_PULSE[warning.severity];
+            const distance = Math.min(300, Math.max(80, warning.distance));
+            const radius = distance * 0.4;
+            const offsetX = Math.sin((angle + 90) * Math.PI / 180) * radius;
+            const offsetY = -Math.cos((angle + 90) * Math.PI / 180) * radius;
+            
+            return (
+              <div
+                key={warning.obstacleId}
+                className={`obstacle-warning-indicator ${shouldPulse ? 'pulse' : ''}`}
+                style={{
+                  transform: `translate(${offsetX}px, ${offsetY}px) rotate(${angle}deg)`,
+                  borderColor: severityColor,
+                  boxShadow: `0 0 15px ${severityColor}88`,
+                }}
+              >
+                <div
+                  className="obstacle-warning-arrow"
+                  style={{ borderBottomColor: severityColor }}
+                />
+                <div
+                  className="obstacle-warning-info"
+                  style={{ transform: `rotate(${-angle}deg)` }}
+                >
+                  <div className="obstacle-warning-icon">
+                    {OBSTACLE_TYPE_ICONS[warning.type as ObstacleType]}
+                  </div>
+                  <div
+                    className="obstacle-warning-distance"
+                    style={{ color: severityColor }}
+                  >
+                    {Math.floor(warning.distance)}m
+                  </div>
+                  {warning.timeToCollision < 5 && (
+                    <div
+                      className="obstacle-warning-ttc"
+                      style={{ color: severityColor }}
+                    >
+                      {warning.timeToCollision.toFixed(1)}s
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {stats.activeWarnings && stats.activeWarnings.some(w => w.severity === 'critical') && (
+        <div className="critical-warning-overlay">
+          <div className="critical-warning-borders" />
+        </div>
+      )}
+
       <div className="hud-left">
         <div className="altitude-meter">
           <div className="meter-label">高度</div>
@@ -408,6 +495,44 @@ export const GameHUD: React.FC<GameHUDProps> = ({ stats, onPause }) => {
               <span className="info-label">⚡闪电擦边</span>
               <span className="info-value">{stats.lightningNearMiss}</span>
             </div>
+          )}
+          {stats.obstacleStats && stats.obstacleStats.totalSpawned > 0 && (
+            <>
+              <div className="info-row info-row-warning">
+                <span className="info-label">🚁 空中目标</span>
+                <span className="info-value">{stats.obstacleStats.totalSpawned}</span>
+              </div>
+              {stats.obstacleStats.totalCollided > 0 && (
+                <div className="info-row info-row-danger">
+                  <span className="info-label">💥 碰撞</span>
+                  <span className="info-value" style={{ color: '#ff6b6b' }}>
+                    {stats.obstacleStats.totalCollided}
+                  </span>
+                </div>
+              )}
+              {stats.obstacleStats.nearMissCount > 0 && (
+                <div className="info-row info-row-highlight">
+                  <span className="info-label">😅 险兆</span>
+                  <span className="info-value" style={{ color: '#ffd700' }}>
+                    {stats.obstacleStats.nearMissCount}
+                  </span>
+                </div>
+              )}
+              {stats.activeWarnings && stats.activeWarnings.length > 0 && (
+                <div
+                  className="info-row info-row-warning"
+                  style={{ borderLeft: `3px solid ${WARNING_SEVERITY_COLORS[stats.activeWarnings[0].severity]}` }}
+                >
+                  <span className="info-label">⚠️ 预警</span>
+                  <span
+                    className="info-value"
+                    style={{ color: WARNING_SEVERITY_COLORS[stats.activeWarnings[0].severity] }}
+                  >
+                    {WARNING_SEVERITY_NAMES[stats.activeWarnings[0].severity]} ×{stats.activeWarnings.length}
+                  </span>
+                </div>
+              )}
+            </>
           )}
           <div className="info-divider" />
           <div className="info-row info-row-highlight">

@@ -1681,3 +1681,122 @@
   font-size: 13px;
 }
 
+.obstacle-warning-indicators {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 45;
+}
+
+.obstacle-warning-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 80px;
+  height: 80px;
+  margin-left: -40px;
+  margin-top: -40px;
+  border: 2px solid;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  transition: all 0.2s ease;
+}
+
+.obstacle-warning-indicator.pulse {
+  animation: warning-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes warning-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.obstacle-warning-arrow {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  margin-left: -8px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 12px solid;
+}
+
+.obstacle-warning-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.obstacle-warning-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.obstacle-warning-distance {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: monospace;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+}
+
+.obstacle-warning-ttc {
+  font-size: 9px;
+  font-weight: 800;
+  font-family: monospace;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+}
+
+.critical-warning-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.critical-warning-borders {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 4px solid rgba(255, 0, 0, 0.6);
+  box-shadow: inset 0 0 60px rgba(255, 0, 0, 0.3);
+  animation: critical-border-pulse 0.5s ease-in-out infinite;
+}
+
+@keyframes critical-border-pulse {
+  0%, 100% {
+    border-color: rgba(255, 0, 0, 0.6);
+    box-shadow: inset 0 0 60px rgba(255, 0, 0, 0.3);
+  }
+  50% {
+    border-color: rgba(255, 0, 0, 0.9);
+    box-shadow: inset 0 0 100px rgba(255, 0, 0, 0.5);
+  }
+}
+
+.info-row-warning {
+  border-left: 3px solid #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+  padding-left: 8px;
+  margin-left: -8px;
+  border-radius: 4px;
+}
+
