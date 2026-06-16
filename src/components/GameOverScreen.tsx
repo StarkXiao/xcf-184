@@ -352,9 +352,9 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                         key={title.id}
                         className="unlock-card unlock-card-title"
                         style={{
-                          '--rarity-color': rarityColor,
+                          ['--rarity-color' as string]: rarityColor,
                           boxShadow: `0 0 20px ${rarityColor}44`,
-                        }}
+                        } as React.CSSProperties}
                       >
                         <div className="unlock-icon">{title.icon}</div>
                         <div className="unlock-info">
@@ -385,9 +385,9 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                         key={achievement.id}
                         className="unlock-card unlock-card-achievement"
                         style={{
-                          '--rarity-color': rarityColor,
+                          ['--rarity-color' as string]: rarityColor,
                           boxShadow: `0 0 20px ${rarityColor}44`,
-                        }}
+                        } as React.CSSProperties}
                       >
                         <div className="unlock-icon">{achievement.icon}</div>
                         <div className="unlock-info">

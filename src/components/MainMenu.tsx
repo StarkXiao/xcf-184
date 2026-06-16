@@ -22,7 +22,6 @@ interface MainMenuProps {
   titleProgress: { unlocked: number; total: number; percentage: number };
   recentAchievements: Achievement[];
   equippedTitle: Title | undefined;
-  unlockedTitles: Title[];
   pilotName: string;
   pilotLevel: number;
   pilotTitle: string;
@@ -51,7 +50,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   titleProgress,
   recentAchievements,
   equippedTitle,
-  unlockedTitles,
   pilotName,
   pilotLevel,
   pilotTitle,
@@ -134,6 +132,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               <span className="stat-mini-value">{Math.floor(bestHeight)}m</span>
               <span className="stat-mini-label">最高高度</span>
             </div>
+          </div>
           </div>
         </div>
 

@@ -1325,10 +1325,9 @@ function App() {
           titleProgress={journey.getTitleProgress()}
           recentAchievements={journey.getRecentAchievements(4)}
           equippedTitle={journey.getEquippedTitle()}
-          unlockedTitles={journey.getUnlockedTitles()}
-          pilotName={journey.state.playerName}
-          pilotLevel={journey.state.level}
-          pilotTitle={journey.state.title}
+          pilotName={journey.state.profile.name}
+          pilotLevel={journey.state.profile.level}
+          pilotTitle={journey.state.profile.title}
           bestScore={journey.getBestScore()}
           bestDistance={journey.getBestDistance()}
           bestHeight={journey.getBestHeight()}

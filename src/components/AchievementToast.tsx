@@ -89,11 +89,11 @@ export const AchievementToast: React.FC<AchievementToastProps> = ({ achievements
             key={toast.id}
             className={`achievement-toast toast-${toast.type}`}
             style={{
-              '--rarity-color': rarityColor,
+              ['--rarity-color' as string]: rarityColor,
               transform: `translateY(${translateY}px) scale(${0.85 + progress * 0.15})`,
               opacity,
               boxShadow: `0 0 30px ${rarityColor}66, 0 0 60px ${rarityColor}33`,
-            }}
+            } as React.CSSProperties}
           >
             <div className="toast-glow" style={{ background: `radial-gradient(circle, ${rarityColor}22 0%, transparent 70%)` }} />
             
@@ -131,10 +131,10 @@ export const AchievementToast: React.FC<AchievementToastProps> = ({ achievements
                   key={i}
                   className="toast-particle"
                   style={{
-                    '--particle-delay': `${i * 0.1}s`,
-                    '--particle-angle': `${(i * 60) + 30}deg`,
+                    ['--particle-delay' as string]: `${i * 0.1}s`,
+                    ['--particle-angle' as string]: `${(i * 60) + 30}deg`,
                     background: rarityColor,
-                  }}
+                  } as React.CSSProperties}
                 />
               ))}
             </div>
