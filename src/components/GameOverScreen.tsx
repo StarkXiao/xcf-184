@@ -1,11 +1,15 @@
 import React, { useMemo } from 'react';
 import type { GameStats, ComboFlowHit } from '../game/types';
+import type { NewlyUnlockedAchievement, NewlyUnlockedTitle } from '../journey';
+import { RARITY_COLORS, RARITY_NAMES } from '../journey/types';
 
 interface GameOverScreenProps {
   stats: GameStats;
   baseStats?: GameStats;
   earnedCoins?: number;
   scoreBonus?: number;
+  newAchievements?: NewlyUnlockedAchievement[];
+  newTitles?: NewlyUnlockedTitle[];
   onRestart: () => void;
   onMainMenu: () => void;
   onWorkshop?: () => void;
@@ -43,6 +47,8 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
   baseStats,
   earnedCoins = 0,
   scoreBonus = 0,
+  newAchievements = [],
+  newTitles = [],
   onRestart,
   onMainMenu,
   onWorkshop,
@@ -329,6 +335,79 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
             </div>
           </div>
         </div>
+
+        {(newAchievements.length > 0 || newTitles.length > 0) && (
+          <div className="unlock-rewards-section">
+            <h3 className="section-title">🎉 本次解锁</h3>
+            
+            {newTitles.length > 0 && (
+              <div className="unlock-group">
+                <h4 className="unlock-group-title">👑 称号</h4>
+                <div className="unlock-grid">
+                  {newTitles.map((nt) => {
+                    const title = nt.title;
+                    const rarityColor = RARITY_COLORS[title.rarity];
+                    return (
+                      <div
+                        key={title.id}
+                        className="unlock-card unlock-card-title"
+                        style={{
+                          '--rarity-color': rarityColor,
+                          boxShadow: `0 0 20px ${rarityColor}44`,
+                        }}
+                      >
+                        <div className="unlock-icon">{title.icon}</div>
+                        <div className="unlock-info">
+                          <div className="unlock-name" style={{ color: rarityColor }}>
+                            {title.name}
+                          </div>
+                          <div className="unlock-desc">{title.description}</div>
+                          <div className="unlock-rarity" style={{ color: rarityColor }}>
+                            {RARITY_NAMES[title.rarity]}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {newAchievements.length > 0 && (
+              <div className="unlock-group">
+                <h4 className="unlock-group-title">🏆 成就</h4>
+                <div className="unlock-grid">
+                  {newAchievements.map((na) => {
+                    const achievement = na.achievement;
+                    const rarityColor = RARITY_COLORS[achievement.rarity];
+                    return (
+                      <div
+                        key={achievement.id}
+                        className="unlock-card unlock-card-achievement"
+                        style={{
+                          '--rarity-color': rarityColor,
+                          boxShadow: `0 0 20px ${rarityColor}44`,
+                        }}
+                      >
+                        <div className="unlock-icon">{achievement.icon}</div>
+                        <div className="unlock-info">
+                          <div className="unlock-name" style={{ color: rarityColor }}>
+                            {achievement.name}
+                          </div>
+                          <div className="unlock-desc">{achievement.description}</div>
+                          <div className="unlock-reward">
+                            <span className="reward-icon">🪙</span>
+                            <span>+{na.rewardCoins}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="gameover-buttons">
           <button className="menu-button primary" onClick={onRestart}>

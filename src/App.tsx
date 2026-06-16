@@ -42,8 +42,10 @@ import { LevelEditor, LevelEditorProvider } from './levelEditor';
 import { levelEditorEngine } from './levelEditor/levelEditorEngine';
 import type { LevelScene } from './levelEditor/types';
 import { JourneyCenter, useJourney } from './journey';
-import type { NewlyUnlockedAchievement } from './journey/journeyEngine';
+import type { NewlyUnlockedAchievement, NewlyUnlockedTitle } from './journey/journeyEngine';
 import type { TrajectoryPoint, FlightMode } from './journey/types';
+import { AchievementToast } from './components/AchievementToast';
+import './components/achievementToast.css';
 import { FestivalCenter } from './festival';
 import { festivalEngine } from './festival/festivalEngine';
 import { festivalStateEmitter } from './festival/useFestival';
@@ -150,6 +152,10 @@ function App() {
   const [levelEditorResult, setLevelEditorResult] = useState<{ levelId: string; score: number; isWin: boolean } | null>(null);
   const [showJourney, setShowJourney] = useState(false);
   const [newJourneyAchievements, setNewJourneyAchievements] = useState<NewlyUnlockedAchievement[]>([]);
+  const [realtimeAchievements, setRealtimeAchievements] = useState<NewlyUnlockedAchievement[]>([]);
+  const [realtimeTitles, setRealtimeTitles] = useState<NewlyUnlockedTitle[]>([]);
+  const [gameNewAchievements, setGameNewAchievements] = useState<NewlyUnlockedAchievement[]>([]);
+  const [gameNewTitles, setGameNewTitles] = useState<NewlyUnlockedTitle[]>([]);
   const [showFestival, setShowFestival] = useState(false);
   const [festivalSceneId, setFestivalSceneId] = useState<string | null>(null);
   const [showMapExplore, setShowMapExplore] = useState(false);
@@ -404,7 +410,29 @@ function App() {
         }
       }
     }
-  }, [workshop]);
+
+    if (gameStateRef.current === 'playing') {
+      const newlyUnlocked = journey.checkRealtimeAchievements(newStats);
+      const newTitles = journey.checkAndUnlockTitles();
+
+      if (newlyUnlocked.length > 0) {
+        setRealtimeAchievements((prev) => [...prev, ...newlyUnlocked]);
+        setGameNewAchievements((prev) => [...prev, ...newlyUnlocked]);
+        const achievementCoins = newlyUnlocked.reduce(
+          (sum, a) => sum + a.rewardCoins, 0
+        );
+        if (achievementCoins > 0) {
+          workshop.addCoins(achievementCoins);
+          setEarnedCoins((prev) => prev + achievementCoins);
+        }
+      }
+
+      if (newTitles.length > 0) {
+        setRealtimeTitles((prev) => [...prev, ...newTitles]);
+        setGameNewTitles((prev) => [...prev, ...newTitles]);
+      }
+    }
+  }, [workshop, journey]);
 
   const handleStateChange = useCallback((state: GameState) => {
     gameStateRef.current = state;
@@ -675,6 +703,10 @@ function App() {
       }
     }
 
+    if (journeyResult.newTitles.length > 0) {
+      setGameNewTitles((prev) => [...prev, ...journeyResult.newTitles]);
+    }
+
     stageTask.updateGlobalBestScore(journey.getBestScore());
     stageTask.checkChapterUnlocks();
     stageTaskStateEmitter.emit();
@@ -805,6 +837,11 @@ function App() {
     setWindObservation(null);
     setStrategySuggestions([]);
     setActiveTips([]);
+    setRealtimeAchievements([]);
+    setRealtimeTitles([]);
+    setGameNewAchievements([]);
+    setGameNewTitles([]);
+    journey.resetRealtimeState();
 
     const currentTrackId = tournamentTrackIdRef.current;
     if (currentTrackId) {
@@ -1284,12 +1321,32 @@ function App() {
             completedStages: stageTask.getStages().filter(s => s.completed).length,
             totalStages: stageTask.getStages().length,
           }}
+          achievementProgress={journey.getAchievementProgress()}
+          titleProgress={journey.getTitleProgress()}
+          recentAchievements={journey.getRecentAchievements(4)}
+          equippedTitle={journey.getEquippedTitle()}
+          unlockedTitles={journey.getUnlockedTitles()}
+          pilotName={journey.state.playerName}
+          pilotLevel={journey.state.level}
+          pilotTitle={journey.state.title}
+          bestScore={journey.getBestScore()}
+          bestDistance={journey.getBestDistance()}
+          bestHeight={journey.getBestHeight()}
         />
       )}
 
       {gameState === 'playing' && (
         <>
           <GameHUD stats={stats} onPause={handlePause} />
+          
+          <AchievementToast
+            achievements={realtimeAchievements}
+            titles={realtimeTitles}
+            onDismiss={() => {
+              setRealtimeAchievements([]);
+              setRealtimeTitles([]);
+            }}
+          />
           
           <FlightTips tips={activeTips} />
 
@@ -1393,6 +1450,8 @@ function App() {
           baseStats={finalStats}
           earnedCoins={earnedCoins}
           scoreBonus={workshop.state.totalScoreBonus}
+          newAchievements={gameNewAchievements}
+          newTitles={gameNewTitles}
           onRestart={handleRestart}
           onMainMenu={handleMainMenu}
           onWorkshop={handleOpenWorkshop}

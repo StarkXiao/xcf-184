@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import type { Achievement, Title } from '../journey/types';
+import { RARITY_COLORS, RARITY_NAMES } from '../journey/types';
 
 interface MainMenuProps {
   onStart: () => void;
@@ -16,6 +18,17 @@ interface MainMenuProps {
   onDifficultyChange: (difficulty: 'easy' | 'normal' | 'hard' | 'extreme') => void;
   unlockedDifficulties: ('easy' | 'normal' | 'hard' | 'extreme')[];
   chapterProgress: { unlocked: number; total: number; totalStars: number; completedStages: number; totalStages: number };
+  achievementProgress: { unlocked: number; total: number; percentage: number };
+  titleProgress: { unlocked: number; total: number; percentage: number };
+  recentAchievements: Achievement[];
+  equippedTitle: Title | undefined;
+  unlockedTitles: Title[];
+  pilotName: string;
+  pilotLevel: number;
+  pilotTitle: string;
+  bestScore: number;
+  bestDistance: number;
+  bestHeight: number;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({ 
@@ -34,6 +47,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onDifficultyChange,
   unlockedDifficulties,
   chapterProgress,
+  achievementProgress,
+  titleProgress,
+  recentAchievements,
+  equippedTitle,
+  unlockedTitles,
+  pilotName,
+  pilotLevel,
+  pilotTitle,
+  bestScore,
+  bestDistance,
+  bestHeight,
 }) => {
   const [showDifficultyInfo, setShowDifficultyInfo] = useState(false);
   
@@ -78,6 +102,102 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             />
           </svg>
         </div>
+
+        <div className="pilot-profile-card">
+          <div className="pilot-avatar">
+            <div className="pilot-avatar-icon">🪁</div>
+            {equippedTitle && (
+              <div className="pilot-equipped-title" style={{ color: RARITY_COLORS[equippedTitle.rarity] }}>
+                {equippedTitle.icon} {equippedTitle.name}
+              </div>
+            )}
+          </div>
+          <div className="pilot-info">
+            <div className="pilot-name">{pilotName}</div>
+            <div className="pilot-level">
+              <span className="level-badge">Lv.{pilotLevel}</span>
+              <span className="pilot-title-text">{pilotTitle}</span>
+            </div>
+            <div className="pilot-stats-mini">
+              <div className="stat-mini-item">
+              <span className="stat-mini-icon">🏆</span>
+              <span className="stat-mini-value">{bestScore.toLocaleString()}</span>
+              <span className="stat-mini-label">最高分</span>
+            </div>
+            <div className="stat-mini-item">
+              <span className="stat-mini-icon">📏</span>
+              <span className="stat-mini-value">{Math.floor(bestDistance)}m</span>
+              <span className="stat-mini-label">最远距离</span>
+            </div>
+            <div className="stat-mini-item">
+              <span className="stat-mini-icon">🏔️</span>
+              <span className="stat-mini-value">{Math.floor(bestHeight)}m</span>
+              <span className="stat-mini-label">最高高度</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="progress-summary">
+          <div className="progress-item">
+            <div className="progress-item-header">
+              <span className="progress-item-icon">🏆</span>
+              <span className="progress-item-title">成就</span>
+              <span className="progress-item-count">{achievementProgress.unlocked}/{achievementProgress.total}</span>
+            </div>
+            <div className="progress-item-bar">
+              <div 
+                className="progress-item-fill" 
+                style={{ width: `${achievementProgress.percentage}%` }} 
+              />
+            </div>
+          </div>
+          <div className="progress-item">
+            <div className="progress-item-header">
+              <span className="progress-item-icon">👑</span>
+              <span className="progress-item-title">称号</span>
+              <span className="progress-item-count">{titleProgress.unlocked}/{titleProgress.total}</span>
+            </div>
+            <div className="progress-item-bar">
+              <div 
+                className="progress-item-fill" 
+                style={{ width: `${titleProgress.percentage}%` }} 
+              />
+            </div>
+          </div>
+        </div>
+
+        {recentAchievements.length > 0 && (
+          <div className="recent-achievements">
+            <div className="recent-achievements-header">
+              <span className="recent-achievements-title">✨ 最近成就</span>
+            </div>
+            <div className="recent-achievements-list">
+              {recentAchievements.slice(0, 4).map((achievement) => {
+                const rarityColor = RARITY_COLORS[achievement.rarity];
+                return (
+                  <div
+                    key={achievement.id}
+                    className="recent-achievement-item"
+                    style={{
+                      borderColor: `${rarityColor}66`,
+                      boxShadow: `0 0 10px ${rarityColor}33`,
+                    }}
+                  >
+                    <div className="recent-achievement-icon">{achievement.icon}</div>
+                    <div className="recent-achievement-info">
+                      <div className="recent-achievement-name" style={{ color: rarityColor }}>
+                        {achievement.name}
+                      </div>
+                      <div className="recent-achievement-rarity" style={{ color: rarityColor }}>
+                        {RARITY_NAMES[achievement.rarity]}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <h1 className="game-title">风筝影子追踪</h1>
         <p className="game-subtitle">Kite Shadow Chase</p>

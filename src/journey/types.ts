@@ -12,6 +12,37 @@ export type AnomalyType =
 
 export type AchievementCategory = 'distance' | 'height' | 'score' | 'skill' | 'exploration' | 'special';
 
+export type TitleType = 'level' | 'achievement' | 'score' | 'height' | 'distance' | 'skill' | 'special';
+
+export interface Title {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  type: TitleType;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  condition: TitleCondition;
+  unlocked: boolean;
+  unlockedAt: number | null;
+  isEquipped: boolean;
+}
+
+export interface TitleCondition {
+  type:
+    | 'min_level'
+    | 'achievement_count'
+    | 'total_score'
+    | 'max_height'
+    | 'total_distance'
+    | 'perfect_flights'
+    | 'achievement_ids'
+    | 'specific_achievement'
+    | 'consecutive_streak'
+    | 'max_combo';
+  target: number;
+  achievementIds?: string[];
+}
+
 export interface FlightRecord {
   id: string;
   mode: FlightMode;
@@ -71,7 +102,14 @@ export interface AchievementCondition {
     | 'perfect_flights'
     | 'modes_unlocked'
     | 'weather_experienced'
-    | 'zero_collision_distance';
+    | 'zero_collision_distance'
+    | 'current_height_realtime'
+    | 'current_score_realtime'
+    | 'current_distance_realtime'
+    | 'max_combo_realtime'
+    | 'aircurrent_single'
+    | 'lightning_miss_total'
+    | 'obstacle_avoid_total';
   target: number;
 }
 
@@ -133,6 +171,7 @@ export interface JourneyState {
   profile: PilotProfile;
   flightRecords: FlightRecord[];
   achievements: Achievement[];
+  titles: Title[];
   bestTrajectories: BestTrajectory[];
   anomalies: AnomalyEvent[];
   growthHistory: GrowthDataPoint[];
@@ -205,3 +244,13 @@ export const PILOT_TITLES = [
   { minLevel: 75, title: '风云驾驭者' },
   { minLevel: 100, title: '传奇飞行家' },
 ];
+
+export const TITLE_TYPE_NAMES: Record<TitleType, string> = {
+  level: '等级',
+  achievement: '成就',
+  score: '得分',
+  height: '高度',
+  distance: '距离',
+  skill: '技巧',
+  special: '特殊',
+};

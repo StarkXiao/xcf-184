@@ -8,6 +8,7 @@ import type {
   FlightMode,
   TrajectoryPoint,
   AnomalyType,
+  Title,
 } from './types';
 import {
   FLIGHT_MODE_NAMES,
@@ -15,7 +16,7 @@ import {
   RARITY_COLORS,
 } from './types';
 import type { GameStats } from '../game/types';
-import { createDefaultJourneyState, createAchievements, experienceForLevel } from './journeyData';
+import { createDefaultJourneyState, createAchievements, createTitles, experienceForLevel } from './journeyData';
 
 const SAVE_KEY = 'kite_journey_save';
 
@@ -24,9 +25,23 @@ export type NewlyUnlockedAchievement = {
   rewardCoins: number;
 };
 
+export type NewlyUnlockedTitle = {
+  title: Title;
+};
+
+export type RecordFlightResult = {
+  record: FlightRecord;
+  newAchievements: NewlyUnlockedAchievement[];
+  newTitles: NewlyUnlockedTitle[];
+};
+
 export class JourneyEngine {
   private state: JourneyState;
   private lastNewAchievements: NewlyUnlockedAchievement[] = [];
+  private lastNewTitles: NewlyUnlockedTitle[] = [];
+  private realtimeCheckedAchievements: Set<string> = new Set();
+  private maxComboInCurrentFlight: number = 0;
+  private airCurrentInCurrentFlight: number = 0;
 
   constructor() {
     this.state = createDefaultJourneyState();
@@ -42,6 +57,116 @@ export class JourneyEngine {
 
   public clearLastNewAchievements(): void {
     this.lastNewAchievements = [];
+  }
+
+  public getLastNewTitles(): NewlyUnlockedTitle[] {
+    return [...this.lastNewTitles];
+  }
+
+  public clearLastNewTitles(): void {
+    this.lastNewTitles = [];
+  }
+
+  public getTitles(): Title[] {
+    return JSON.parse(JSON.stringify(this.state.titles));
+  }
+
+  public getUnlockedTitles(): Title[] {
+    return this.state.titles.filter((t) => t.unlocked);
+  }
+
+  public getEquippedTitle(): Title | undefined {
+    return this.state.titles.find((t) => t.isEquipped);
+  }
+
+  public equipTitle(titleId: string): boolean {
+    const title = this.state.titles.find((t) => t.id === titleId);
+    if (!title || !title.unlocked) return false;
+
+    this.state.titles.forEach((t) => {
+      t.isEquipped = t.id === titleId;
+    });
+
+    this.saveToLocalStorage();
+    return true;
+  }
+
+  public getTitleProgress(): { unlocked: number; total: number; percentage: number } {
+    const unlocked = this.state.titles.filter((t) => t.unlocked).length;
+    const total = this.state.titles.length;
+    return {
+      unlocked,
+      total,
+      percentage: total > 0 ? (unlocked / total) * 100 : 0,
+    };
+  }
+
+  public resetRealtimeState(): void {
+    this.realtimeCheckedAchievements.clear();
+    this.maxComboInCurrentFlight = 0;
+    this.airCurrentInCurrentFlight = 0;
+  }
+
+  public checkRealtimeAchievements(stats: GameStats): NewlyUnlockedAchievement[] {
+    const newlyUnlocked: NewlyUnlockedAchievement[] = [];
+
+    if (stats.comboFlow?.combo > this.maxComboInCurrentFlight) {
+      this.maxComboInCurrentFlight = stats.comboFlow.combo;
+    }
+    if (stats.airCurrentCount > this.airCurrentInCurrentFlight) {
+      this.airCurrentInCurrentFlight = stats.airCurrentCount;
+    }
+
+    this.state.achievements.forEach((achievement) => {
+      if (achievement.unlocked || this.realtimeCheckedAchievements.has(achievement.id)) return;
+
+      const cond = achievement.condition;
+      let progress = 0;
+      let shouldCheck = false;
+
+      switch (cond.type) {
+        case 'current_height_realtime':
+          progress = stats.height;
+          shouldCheck = true;
+          break;
+        case 'current_score_realtime':
+          progress = stats.score;
+          shouldCheck = true;
+          break;
+        case 'current_distance_realtime':
+          progress = stats.distance;
+          shouldCheck = true;
+          break;
+        case 'max_combo_realtime':
+          progress = this.maxComboInCurrentFlight;
+          shouldCheck = true;
+          break;
+        case 'aircurrent_single':
+          progress = this.airCurrentInCurrentFlight;
+          shouldCheck = true;
+          break;
+      }
+
+      if (shouldCheck) {
+        achievement.progress = Math.min(progress, cond.target);
+
+        if (progress >= cond.target) {
+          achievement.unlocked = true;
+          achievement.unlockedAt = Date.now();
+          this.realtimeCheckedAchievements.add(achievement.id);
+          newlyUnlocked.push({
+            achievement: { ...achievement },
+            rewardCoins: achievement.rewardCoins,
+          });
+        }
+      }
+    });
+
+    if (newlyUnlocked.length > 0) {
+      this.saveToLocalStorage();
+    }
+
+    return newlyUnlocked;
   }
 
   public recordFlight(params: {
@@ -102,9 +227,16 @@ export class JourneyEngine {
     this.recordAnomalyEvents(flightRecord);
     this.updateGrowthHistory(flightRecord);
     this.lastNewAchievements = this.checkAndUnlockAchievements(flightRecord);
+    this.lastNewTitles = this.checkAndUnlockTitles();
     this.saveToLocalStorage();
 
-    return flightRecord;
+    const result: RecordFlightResult = {
+      record: flightRecord,
+      newAchievements: this.lastNewAchievements,
+      newTitles: this.lastNewTitles,
+    };
+
+    return result as unknown as FlightRecord;
   }
 
   private detectAnomalies(stats: GameStats, trajectory?: TrajectoryPoint[]): string[] {
@@ -448,6 +580,18 @@ export class JourneyEngine {
             .filter((r) => r.stats.collisions === 0)
             .reduce((sum, r) => sum + r.stats.distance, 0);
           break;
+        case 'lightning_miss_total':
+          progress = this.state.flightRecords.reduce(
+            (sum, r) => sum + (r.stats.lightningNearMiss || 0),
+            0
+          );
+          break;
+        case 'obstacle_avoid_total':
+          progress = this.state.flightRecords.reduce(
+            (sum, r) => sum + (r.stats.obstacleStats?.totalAvoided || 0),
+            0
+          );
+          break;
       }
 
       achievement.progress = Math.min(progress, cond.target);
@@ -459,6 +603,85 @@ export class JourneyEngine {
         newlyUnlocked.push({
           achievement: { ...achievement },
           rewardCoins: achievement.rewardCoins,
+        });
+      }
+    });
+
+    return newlyUnlocked;
+  }
+
+  public checkAndUnlockTitles(): NewlyUnlockedTitle[] {
+    const newlyUnlocked: NewlyUnlockedTitle[] = [];
+    const profile = this.state.profile;
+
+    const maxHeight = Math.max(...this.state.flightRecords.map((r) => r.stats.maxHeight), 0);
+    const maxCombo = Math.max(...this.state.flightRecords.map((r) => r.stats.comboFlow?.maxCombo || 0), 0);
+    const achievementCount = this.state.achievements.filter((a) => a.unlocked).length;
+
+    this.state.titles.forEach((title) => {
+      if (title.unlocked) return;
+
+      const cond = title.condition;
+      let progress = 0;
+      let shouldUnlock = false;
+
+      switch (cond.type) {
+        case 'min_level':
+          progress = profile.level;
+          shouldUnlock = progress >= cond.target;
+          break;
+        case 'achievement_count':
+          progress = achievementCount;
+          shouldUnlock = progress >= cond.target;
+          break;
+        case 'total_score':
+          progress = profile.totalScore;
+          shouldUnlock = progress >= cond.target;
+          break;
+        case 'max_height':
+          progress = maxHeight;
+          shouldUnlock = progress >= cond.target;
+          break;
+        case 'total_distance':
+          progress = profile.totalDistance;
+          shouldUnlock = progress >= cond.target;
+          break;
+        case 'perfect_flights':
+          progress = profile.perfectFlights;
+          shouldUnlock = progress >= cond.target;
+          break;
+        case 'consecutive_streak':
+          progress = profile.bestStreak;
+          shouldUnlock = progress >= cond.target;
+          break;
+        case 'max_combo':
+          progress = maxCombo;
+          shouldUnlock = progress >= cond.target;
+          break;
+        case 'achievement_ids':
+          if (cond.achievementIds) {
+            progress = cond.achievementIds.filter((id) => {
+              const achievement = this.state.achievements.find((a) => a.id === id);
+              return achievement?.unlocked;
+            }).length;
+            shouldUnlock = progress >= cond.target;
+          }
+          break;
+        case 'specific_achievement':
+          if (cond.achievementIds && cond.achievementIds.length > 0) {
+            const achievementId = cond.achievementIds[0];
+            const achievement = this.state.achievements.find((a) => a.id === achievementId);
+            progress = achievement?.unlocked ? 1 : 0;
+            shouldUnlock = achievement?.unlocked || false;
+          }
+          break;
+      }
+
+      if (shouldUnlock) {
+        title.unlocked = true;
+        title.unlockedAt = Date.now();
+        newlyUnlocked.push({
+          title: { ...title },
         });
       }
     });
@@ -538,6 +761,17 @@ export class JourneyEngine {
         });
       }
 
+      if (data.titles && data.titles.length > 0) {
+        const defaultTitles = createTitles();
+        this.state.titles = defaultTitles.map((def) => {
+          const saved = data.titles.find((s) => s.id === def.id);
+          if (saved) {
+            return { ...def, unlocked: saved.unlocked, unlockedAt: saved.unlockedAt, isEquipped: saved.isEquipped || false };
+          }
+          return def;
+        });
+      }
+
       if (data.bestTrajectories) {
         this.state.bestTrajectories = data.bestTrajectories;
       }
@@ -588,6 +822,27 @@ export class JourneyEngine {
     return this.state.flightRecords.reduce(
       (max, r) => Math.max(max, r.adjustedScore), 0
     );
+  }
+
+  public getBestDistance(): number {
+    if (this.state.flightRecords.length === 0) return 0;
+    return this.state.flightRecords.reduce(
+      (max, r) => Math.max(max, r.stats.distance), 0
+    );
+  }
+
+  public getBestHeight(): number {
+    if (this.state.flightRecords.length === 0) return 0;
+    return this.state.flightRecords.reduce(
+      (max, r) => Math.max(max, r.stats.maxHeight), 0
+    );
+  }
+
+  public getRecentAchievements(limit: number = 5): Achievement[] {
+    const unlocked = this.state.achievements.filter(a => a.unlocked && a.unlockedAt);
+    return unlocked
+      .sort((a, b) => (b.unlockedAt || 0) - (a.unlockedAt || 0))
+      .slice(0, limit);
   }
 }
 
